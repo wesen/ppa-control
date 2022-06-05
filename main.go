@@ -21,11 +21,11 @@ const (
 )
 
 const (
-	StatusCommand  uint16 = 2
-	StatusRequest         = 6
-	StatusResponse        = 1
-	StatusError           = 9
-	StatusWait            = 0x41
+	StatusCommand  uint16 = 0x0102
+	StatusRequest         = 0x0106
+	StatusResponse        = 0x0101
+	StatusError           = 0x0109
+	StatusWait            = 0x0141
 )
 
 type BasicHeader struct {
@@ -51,7 +51,7 @@ func NewBasicHeader(
 		DeviceUniqueId: deviceUniqueId,
 		SequenceNumber: sequenceNumber,
 		ComponentId:    componentId,
-		Reserved:       0,
+		Reserved:       1, // Change
 	}
 }
 
@@ -100,7 +100,7 @@ type PresetRecall struct {
 }
 
 func encodePresetRecall(w io.Writer, pr *PresetRecall) error {
-	err := binary.Write(w, binary.LittleEndian, pr.CrtFlags)
+	err = binary.Write(w, binary.LittleEndian, pr.CrtFlags)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ var (
 	port           = flag.Uint("port", 5151, "server port")
 	runServer      = flag.Bool("run-server", false, "Run as server too")
 	presetPosition = flag.Int("position", 1, "preset")
-	componentId    = flag.Int("component-id", 0xfe, "component ID (default: 0xfe)")
+	componentId    = flag.Int("component-id", 0xff, "component ID (default: 0xff)")
 )
 
 func main() {
