@@ -23,9 +23,15 @@ func main() {
 	}()
 
 	w.Resize(fyne.NewSize(300, 300))
+	w.Show()
+
+	w2 := a.NewWindow("ppa-control")
+	w2.SetContent(widget.NewLabel("Hello Fyne!"))
+	w2.Resize(fyne.NewSize(100, 100))
+	w2.Show()
 
 	// XXX how do we deal with contexts and cancellation of goroutines?
-	w.ShowAndRun()
+	a.Run()
 }
 
 func updateTime(clock *widget.Label) {
