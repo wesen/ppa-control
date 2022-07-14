@@ -26,7 +26,13 @@ func main() {
 	w.Show()
 
 	w2 := a.NewWindow("ppa-control")
-	w2.SetContent(widget.NewLabel("Hello Fyne!"))
+	w2.SetContent(widget.NewButton("Open new window", func() {
+		w3 := a.NewWindow("ppa-control new")
+		w3.SetContent(widget.NewButton("Close", func() {
+			w3.Close()
+		}))
+		w3.Show()
+	}))
 	w2.Resize(fyne.NewSize(100, 100))
 	w2.Show()
 
