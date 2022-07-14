@@ -1,5 +1,10 @@
-all: ppa-cli.arm64.macos
+all: build/ppa-cli.arm64.macos build/ppa-cli.x86_64.windows
 
-ppa-cli.arm64.macos:
+build:
 	mkdir -p build
-	go build -o build/ppa-cli.arm64.macos ./cmd/ppa-cli
+
+build/ppa-cli.arm64.macos: build
+	GOOS=darwin GOARCH=arm64 go build -o $@ ./cmd/ppa-cli
+
+build/ppa-cli.x86_64.windows: build
+	GOOS=windows GOARCH=amd64 go build -o $@ ./cmd/ppa-cli
