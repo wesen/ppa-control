@@ -17,11 +17,11 @@ const Timeout = 10 * time.Second
 type client struct {
 	SendChannel    chan *bytes.Buffer
 	ReceiveChannel chan *bytes.Buffer
-	ComponentId    uint8
+	ComponentId    int
 	seqCmd         uint16
 }
 
-func NewClient(componentId uint8) *client {
+func NewClient(componentId int) *client {
 	return &client{
 		SendChannel:    make(chan *bytes.Buffer),
 		ReceiveChannel: make(chan *bytes.Buffer),

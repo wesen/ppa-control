@@ -31,7 +31,7 @@ func main() {
 		time.Sleep(1 * time.Second)
 	}
 
-	c := client.NewClient(0xFF)
+	c := client.NewClient(*componentId)
 
 	go func() {
 		for {
