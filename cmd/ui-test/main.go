@@ -16,10 +16,13 @@ func main() {
 	a := app.New()
 	w := a.NewWindow("ppa-control")
 
-	serverConsole := canvas.NewText("ServerConsole\nServerConsole", color.White)
-	//serverConsole := widget.NewLabel("ServerConsole\nServerConsole\nServerConsole")
+	serverConsole := widget.NewLabel("ServerConsole\nServerConsole\nServerConsole")
+	serverScrollContainer := container.NewVScroll(serverConsole)
+	serverScrollContainer.SetMinSize(fyne.NewSize(600, 150))
 
 	clientConsole := canvas.NewText("Hello There", color.White)
+	clientScrollContainer := container.NewVScroll(clientConsole)
+	clientScrollContainer.SetMinSize(fyne.NewSize(600, 150))
 
 	var presetButtons = make([]fyne.CanvasObject, 8)
 	for i := 0; i < 8; i++ {
@@ -59,9 +62,9 @@ func main() {
 	// a side bar and the volume
 
 	mainGridContainer := container.NewVBox(
-		serverConsole,
+		serverScrollContainer,
 		widget.NewSeparator(),
-		clientConsole,
+		clientScrollContainer,
 		widget.NewSeparator(),
 		presetButtonContainer,
 		widget.NewSeparator(),
@@ -69,19 +72,24 @@ func main() {
 		widget.NewSeparator(),
 		controlButtonContainer)
 
-	serverConsole.Text = "foobar\nFoo Foo\nblablabla"
+	serverConsole.Text = "foobar\nFoo Foo\nblablabla\nfunkfunk\nyo"
 	serverConsole.Refresh()
 
-	masterSlider := widget.NewSlider(0, 1)
+	masterTitle := canvas.NewText("master", color.White)
+	masterSlider := widget.NewSlider(0, 10)
 	masterSlider.Step = 0.01
 	masterSlider.Orientation = widget.Vertical
+	masterSlider.MinSize()
 	masterSlider.OnChanged = func(value float64) {
 		log.Println(fmt.Sprintf("Master Volume: %f", value))
 	}
-	masterContainer := container.NewVBox(masterSlider)
-	masterContainer.Resize(fyne.NewSize(50, 700))
+	sliderContainer := container.New(layout.NewBorderLayout(
+		//container.NewVBox(masterTitle, widget.NewSeparator()),
+		masterTitle,
+		nil, nil, nil),
+		masterTitle, masterSlider)
 
-	mainHBox := container.NewHBox(mainGridContainer, widget.NewSeparator(), masterContainer)
+	mainHBox := container.NewHBox(mainGridContainer, widget.NewSeparator(), sliderContainer)
 	w.SetContent(mainHBox) // This is a text entry field
 	w.Resize(fyne.NewSize(800, 800))
 
