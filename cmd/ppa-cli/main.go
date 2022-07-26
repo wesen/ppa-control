@@ -12,7 +12,7 @@ import (
 
 var (
 	address        = flag.String("address", "127.0.0.1", "server address")
-	port           = flag.Uint("port", 5151, "server port")
+	port           = flag.Uint("port", 5001, "server port")
 	runServer      = flag.Bool("run-server", false, "Run as server too")
 	presetPosition = flag.Int("position", 1, "preset")
 	componentId    = flag.Int("component-id", 0xff, "component ID (default: 0xff)")
