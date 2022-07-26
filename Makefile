@@ -8,7 +8,11 @@ build/ppa-cli.arm64.macos: build
 
 build/ppa-control.app: build
 	cd cmd/ui-test \
-       && CGO_ENABLED=1 fyne package -os darwin --name ppa-control \
+       && MACOSX_DEPLOYMENT_TARGET=10.11 \
+          GOARCH=amd64 \
+          CGO_CFLAGS=-mmacosx-version-min=10.11 \
+          CGO_LDFLAGS=-mmacosx-version-min=10.11 \
+          CGO_ENABLED=1 fyne package -os darwin --name ppa-control \
        && mv ppa-control.app ../../build
 
 build/ppa-cli.x86_64.windows.exe: build
