@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/augustoroman/hexdump"
+	"golang.org/x/sync/errgroup"
 	"io"
+	"log"
 	"net"
 	"ppa-control/lib/protocol"
 	"time"
@@ -58,32 +60,21 @@ func (c *client) Run(ctx context.Context, address string) (err error) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
 
-	go func() {
-
-	}()
-
-	for {
-		select {
-		case <-ctx.Done():
-			fmt.Println("client.go: cancelled")
-			// XXX I guess we could close the socket here
-			return ctx.Err()
-
-		case buf := <-c.SendChannel:
-			n, err := io.Copy(conn, buf)
-			if err != nil {
-				return err
-			}
-			fmt.Printf("client.go: packet-written: bytes=%d\n", n)
+	grp, ctx := errgroup.WithContext(ctx)
+	grp.Go(func() error {
+		defer func() {
+			log.Printf("read-loop exiting\n")
+		}()
+		for {
 			buffer := make([]byte, MaxBufferSize)
-			deadline := time.Now().Add(Timeout)
-			err = conn.SetReadDeadline(deadline)
-			if err != nil {
-				return err
-			}
+			//deadline := time.Now().Add(Timeout)
+			//err = conn.SetReadDeadline(deadline)
+			//if err != nil {
+			//	return err
+			//}
 
+			// Block on read
 			nRead, addr, err := conn.ReadFrom(buffer)
 			if err != nil {
 				return err
@@ -92,5 +83,27 @@ func (c *client) Run(ctx context.Context, address string) (err error) {
 			fmt.Printf("client.go: packet-received: bytes=%d from=%s\nclient.go: %s\n",
 				nRead, addr.String(), hexdump.Dump(buffer[:nRead]))
 		}
-	}
+	})
+
+	grp.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("client.go: cancelled")
+				// XXX I guess we could close the socket here
+				conn.Close()
+				return ctx.Err()
+
+			case buf := <-c.SendChannel:
+				// Send
+				n, err := io.Copy(conn, buf)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("client.go: packet-written: bytes=%d\n", n)
+			}
+		}
+	})
+
+	return grp.Wait()
 }
