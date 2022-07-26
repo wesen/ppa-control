@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -8,11 +10,26 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
+	"golang.org/x/sync/errgroup"
 	"image/color"
 	"log"
+	"ppa-control/lib/client"
+	"ppa-control/lib/server"
+	"time"
+)
+
+var (
+	address        = flag.String("address", "127.0.0.1", "server address")
+	port           = flag.Uint("port", 5001, "server port")
+	runServer      = flag.Bool("run-server", false, "Run as server too")
+	presetPosition = flag.Int("position", 1, "preset")
+	componentId    = flag.Int("component-id", 0xff, "component ID (default: 0xff)")
 )
 
 func main() {
+	flag.Parse()
+	c := client.NewClient(*componentId)
+
 	a := app.New()
 	w := a.NewWindow("ppa-control")
 
@@ -26,18 +43,21 @@ func main() {
 
 	var presetButtons = make([]fyne.CanvasObject, 8)
 	for i := 0; i < 8; i++ {
+		j := i
 		presetButtons[i] = widget.NewButton(fmt.Sprintf("Preset %d", i+1),
 			func() {
-				log.Println(fmt.Sprintf("Preset %d clicked", i+1))
+				c.SendPresetRecallByPresetIndex(j)
+				log.Println(fmt.Sprintf("Preset %d clicked", j+1))
 			})
 	}
 	presetButtonContainer := container.New(layout.NewGridLayout(4), presetButtons...)
 
 	var controlButtons []fyne.CanvasObject = make([]fyne.CanvasObject, 8)
 	for i := 0; i < 8; i++ {
+		j := i
 		controlButtons[i] = widget.NewButton(fmt.Sprintf("Control %d", i+1),
 			func() {
-				log.Println(fmt.Sprintf("Control %d clicked", i+1))
+				log.Println(fmt.Sprintf("Control %d clicked", j))
 			})
 	}
 	controlButtonContainer := container.New(layout.NewGridLayout(4), controlButtons...)
@@ -92,6 +112,35 @@ func main() {
 	mainHBox := container.NewHBox(mainGridContainer, widget.NewSeparator(), sliderContainer)
 	w.SetContent(mainHBox) // This is a text entry field
 	w.Resize(fyne.NewSize(800, 800))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	serverString := fmt.Sprintf("%s:%d", *address, *port)
+	fmt.Printf("Connecting to %s\n", serverString)
+
+	if *runServer {
+		fmt.Printf("Starting test server")
+		go server.RunServer(ctx, serverString)
+		time.Sleep(1 * time.Second)
+	}
+
+	w.SetOnClosed(func() {
+		log.Println("Closing")
+		cancel()
+		log.Println("After cancel")
+	})
+
+	grp, ctx2 := errgroup.WithContext(ctx)
+	grp.Go(func() error {
+		return c.Run(ctx2, serverString)
+	})
+	go func() {
+		log.Println("Waiting for main loop")
+		err := grp.Wait()
+		log.Println("Waited for main loop")
+		if err != nil {
+			log.Printf("Error in main loop: %v\n", err)
+		}
+	}()
 
 	w.ShowAndRun()
 }
