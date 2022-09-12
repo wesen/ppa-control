@@ -16,6 +16,8 @@ const (
 	MessageTypeLiveCmd      MessageType = 1
 	MessageTypeDeviceData   MessageType = 2
 	MessageTypePresetRecall MessageType = 4
+	MessageTypePresetSave   MessageType = 5
+	MessageTypeUnknown      MessageType = 255
 )
 
 type StatusType uint16

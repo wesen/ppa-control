@@ -28,7 +28,8 @@ var (
 
 func main() {
 	flag.Parse()
-	c := client.NewClient(*componentId)
+	serverString := fmt.Sprintf("%s:%d", *address, *port)
+	c := client.NewClient(serverString, *componentId)
 
 	a := app.New()
 	w := a.NewWindow("ppa-control")
@@ -114,7 +115,6 @@ func main() {
 	w.Resize(fyne.NewSize(800, 800))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	serverString := fmt.Sprintf("%s:%d", *address, *port)
 	fmt.Printf("Connecting to %s\n", serverString)
 
 	if *runServer {
@@ -131,7 +131,7 @@ func main() {
 
 	grp, ctx2 := errgroup.WithContext(ctx)
 	grp.Go(func() error {
-		return c.Run(ctx2, serverString)
+		return c.Run(ctx2)
 	})
 	go func() {
 		log.Println("Waiting for main loop")

@@ -9,11 +9,13 @@ import (
 	"github.com/google/gopacket/pcap"
 	"os"
 	"ppa-control/lib/protocol"
+	"strings"
 )
 
 var (
-	printPings    = flag.Bool("print-pings", false, "Print pings")
-	printUnknowns = flag.Bool("print-unknowns", false, "Print unknown messages")
+	printPackets = flag.String("print-packets", "deviceData,liveCmd,unknown,ping,presetRecall", "Print packets, comma-separated list of deviceData,ping,liveCmd,presetRecall,unknown")
+	printHexdump = flag.Bool("print-hexdump", false, "Print hexdump")
+	printPayload = flag.Bool("print-payload", false, "Print payload")
 )
 
 func main() {
@@ -21,8 +23,24 @@ func main() {
 
 	args := flag.Args()
 	if len(args) != 1 {
-		fmt.Println("Usage: pcap-dump [-pings] <filename>")
+		fmt.Println("Usage: pcap-dump [-print-packets (deviceData,liveCmd,etc...)] <filename>")
 		os.Exit(1)
+	}
+
+	packetsToPrints := map[protocol.MessageType]bool{}
+	for _, p := range strings.Split(*printPackets, ",") {
+		switch p {
+		case "deviceData":
+			packetsToPrints[protocol.MessageTypeDeviceData] = true
+		case "ping":
+			packetsToPrints[protocol.MessageTypePing] = true
+		case "liveCmd":
+			packetsToPrints[protocol.MessageTypeLiveCmd] = true
+		case "presetRecall":
+			packetsToPrints[protocol.MessageTypePresetRecall] = true
+		case "unknown":
+			packetsToPrints[protocol.MessageTypeUnknown] = true
+		}
 	}
 
 	fileName := args[0]
@@ -33,12 +51,12 @@ func main() {
 	} else {
 		packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 		for packet := range packetSource.Packets() {
-			handlePacket(packet) // Do something with a packet here.
+			handlePacket(packet, packetsToPrints) // Do something with a packet here.
 		}
 	}
 }
 
-func handlePacket(packet gopacket.Packet) {
+func handlePacket(packet gopacket.Packet, packetsToPrint map[protocol.MessageType]bool) {
 	ip4Layer := packet.Layer(layers.LayerTypeIPv4)
 	if ip4Layer == nil {
 		return
@@ -67,20 +85,23 @@ func handlePacket(packet gopacket.Packet) {
 			return
 		}
 
-		if !*printPings && hdr.MessageType == protocol.MessageTypePing {
-			return
+		isUnknown := false
+
+		switch hdr.MessageType {
+		case protocol.MessageTypeDeviceData:
+		case protocol.MessageTypePing:
+		case protocol.MessageTypeLiveCmd:
+		case protocol.MessageTypePresetRecall:
+		default:
+			isUnknown = true
 		}
 
 		// skip unknown message types
-		switch hdr.MessageType {
-		case protocol.MessageTypePing:
-		case protocol.MessageTypePresetRecall:
-		case protocol.MessageTypeLiveCmd:
-		case protocol.MessageTypeDeviceData:
-		default:
-			if !*printUnknowns {
-				return
-			}
+		if !packetsToPrint[hdr.MessageType] && !isUnknown {
+			return
+		}
+		if isUnknown && !packetsToPrint[protocol.MessageTypeUnknown] {
+			return
 		}
 
 		fmt.Printf("----\nsrc: %s:%d dst: %s:%d\n",
@@ -88,7 +109,9 @@ func handlePacket(packet gopacket.Packet) {
 			udp.SrcPort,
 			iPv4.DstIP,
 			udp.DstPort)
-		fmt.Printf("%s--\n", hex.Dump(payload))
+		if *printHexdump {
+			fmt.Printf("%s--\n", hex.Dump(payload))
+		}
 
 		// the format method checks to see if there is a string method, and thus if
 		fmt.Printf("MessageType: %s (%x)\n", hdr.MessageType, byte(hdr.MessageType))
@@ -98,10 +121,11 @@ func handlePacket(packet gopacket.Packet) {
 		fmt.Printf("SequenceNumber: %x\n", hdr.SequenceNumber)
 		fmt.Printf("ComponentId: %x\n", hdr.ComponentId)
 		fmt.Printf("Reserved: %x\n", hdr.Reserved)
-		fmt.Printf("\n\n")
 
 		if len(payload) > 12 {
-			fmt.Printf("Payload: %s\n", hex.Dump(payload[12:]))
+			if isUnknown || *printHexdump {
+				fmt.Printf("\nPayload: %s\n", hex.Dump(payload[12:]))
+			}
 		}
 
 		// catch standard statuses
