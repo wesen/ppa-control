@@ -16,19 +16,57 @@ import (
 const MaxBufferSize = 1024
 const Timeout = 10 * time.Second
 
+type Client interface {
+	Run(ctx context.Context) error
+	SendPresetRecallByPresetIndex(index int)
+	Ping()
+}
+
 type client struct {
+	Address        string
 	SendChannel    chan *bytes.Buffer
 	ReceiveChannel chan *bytes.Buffer
 	ComponentId    int
 	seqCmd         uint16
 }
 
-func NewClient(componentId int) *client {
+type multiClient struct {
+	clients []Client
+}
+
+func NewClient(address string, componentId int) *client {
 	return &client{
 		SendChannel:    make(chan *bytes.Buffer),
 		ReceiveChannel: make(chan *bytes.Buffer),
+		Address:        address,
 		ComponentId:    componentId,
 		seqCmd:         1,
+	}
+}
+
+func NewMultiClient(clients []Client) *multiClient {
+	return &multiClient{clients: clients}
+}
+
+func (c *client) Ping() {
+	buf := new(bytes.Buffer)
+	bh := protocol.NewBasicHeader(
+		protocol.MessageTypePing,
+		protocol.StatusCommandClient,
+		[4]byte{0, 0, 0, 0},
+		c.seqCmd,
+		byte(c.ComponentId),
+	)
+
+	c.seqCmd++
+
+	protocol.EncodeHeader(buf, bh)
+	c.SendChannel <- buf
+}
+
+func (mc *multiClient) SendPing() {
+	for _, c := range mc.clients {
+		c.Ping()
 	}
 }
 
@@ -36,7 +74,7 @@ func (c *client) SendPresetRecallByPresetIndex(index int) {
 	buf := new(bytes.Buffer)
 	bh := protocol.NewBasicHeader(
 		protocol.MessageTypePresetRecall,
-		protocol.StatusCommand,
+		protocol.StatusCommandClient,
 		[4]byte{0, 0, 0, 0},
 		c.seqCmd,
 		byte(c.ComponentId),
@@ -50,8 +88,14 @@ func (c *client) SendPresetRecallByPresetIndex(index int) {
 	c.SendChannel <- buf
 }
 
-func (c *client) Run(ctx context.Context, address string) (err error) {
-	raddr, err := net.ResolveUDPAddr("udp", address)
+func (mc *multiClient) SendPresetRecallByPresetIndex(index int) {
+	for _, c := range mc.clients {
+		c.SendPresetRecallByPresetIndex(index)
+	}
+}
+
+func (c *client) Run(ctx context.Context) (err error) {
+	raddr, err := net.ResolveUDPAddr("udp", c.Address)
 	if err != nil {
 		return
 	}
@@ -60,6 +104,7 @@ func (c *client) Run(ctx context.Context, address string) (err error) {
 	if err != nil {
 		return
 	}
+	defer conn.Close()
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
@@ -105,5 +150,16 @@ func (c *client) Run(ctx context.Context, address string) (err error) {
 		}
 	})
 
+	return grp.Wait()
+}
+
+func (c *multiClient) Run(ctx context.Context) (err error) {
+	grp, ctx := errgroup.WithContext(ctx)
+
+	for _, c := range c.clients {
+		grp.Go(func() error {
+			return c.Run(ctx)
+		})
+	}
 	return grp.Wait()
 }
