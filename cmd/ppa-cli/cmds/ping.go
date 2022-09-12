@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 	"ppa-control/lib/client"
 	logger "ppa-control/lib/log"
 	"ppa-control/lib/utils"
@@ -42,16 +43,20 @@ var pingCmd = &cobra.Command{
 			clients = append(clients, client.NewClient(fmt.Sprintf("%s:%d", addr, port), int(componentId)))
 		}
 		multiClient := client.NewMultiClient(clients)
+		ctx := context.Background()
+		grp, ctx := errgroup.WithContext(ctx)
+
 		if len(discoveryAddrs) > 0 {
-			err := multiClient.Discover(discoveryAddrs)
-			if err != nil {
-				logger.Sugar.Error("error", err.Error())
-				return
-			}
+			grp.Go(func() error {
+				return multiClient.Discover(discoveryAddrs)
+			})
 		}
 
-		ctx := context.Background()
-		err := multiClient.Run(ctx)
+		grp.Go(func() error {
+			return multiClient.Run(ctx)
+		})
+
+		err := grp.Wait()
 		if err != nil {
 			logger.Sugar.Error("error", err.Error())
 			return
@@ -62,7 +67,7 @@ var pingCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(pingCmd)
 	pingCmd.PersistentFlags().StringP(
-		"addresses", "a", "*",
+		"addresses", "a", "",
 		"Addresses to ping, comma separated",
 	)
 	pingCmd.PersistentFlags().StringP(

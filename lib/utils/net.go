@@ -43,7 +43,7 @@ func GetLocalMulticastAddresses() ([]*net.IPAddr, error) {
 		return nil, err
 	}
 	for _, i := range ifaces {
-		addrs, err := i.MulticastAddrs()
+		addrs, err := i.Addrs()
 		if err != nil {
 			logger.Sugar.Warn("error", err.Error())
 			continue
