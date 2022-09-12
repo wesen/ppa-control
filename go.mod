@@ -5,6 +5,7 @@ go 1.17
 require (
 	fyne.io/fyne/v2 v2.2.3
 	github.com/augustoroman/hexdump v0.0.0-20190827031536-6506f4163e93
+	github.com/google/gopacket v1.1.19
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
 
