@@ -78,11 +78,14 @@ func (c *client) Run(ctx context.Context) (err error) {
 			log.Debug().
 				Str("address", conn.LocalAddr().String()).
 				Msg("Waiting for data")
-			deadline := time.Now().Add(Timeout)
-			err = conn.SetReadDeadline(deadline)
-			if err != nil {
-				return err
-			}
+
+			//deadline := time.Now().Add(Timeout)
+			//err = conn.SetReadDeadline(deadline)
+			//if err != nil {
+			//	log.Warn().
+			//		Err(err).
+			//		Msg("Could not set read deadline")
+			//}
 
 			n, srcAddr, err := conn.ReadFromUDP(buffer)
 			if err != nil {

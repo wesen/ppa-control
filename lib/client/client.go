@@ -152,11 +152,16 @@ func (c *client) Run(ctx context.Context) (err error) {
 			log.Debug().
 				Str("address", conn.LocalAddr().String()).
 				Msg("Reading from connection")
-			deadline := time.Now().Add(Timeout)
-			err = conn.SetReadDeadline(deadline)
-			if err != nil {
-				return err
-			}
+
+			//deadline := time.Now().Add(Timeout)
+			//err = conn.SetReadDeadline(deadline)
+			//if err != nil {
+			//	log.Warn().
+			//		Str("address", conn.LocalAddr().String()).
+			//		Str("error", err.Error()).
+			//		Msg("Failed to set read deadline")
+			//	return err
+			//}
 
 			nRead, addr, err := conn.ReadFrom(buffer)
 			if err != nil {
@@ -172,8 +177,7 @@ func (c *client) Run(ctx context.Context) (err error) {
 				default:
 				}
 				log.Warn().Err(err).Msg("Failed to read from connection")
-				continue
-				// ignore errors anyway
+				return err
 			}
 
 			fmt.Printf("%s\n", hexdump.Dump(buffer[:nRead]))
