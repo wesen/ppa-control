@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/netip"
 	"ppa-control/lib/protocol"
+	"syscall"
 	"time"
 )
 
@@ -57,14 +58,28 @@ func NewClient(address string, name string, deviceUniqueId [4]byte, componentId 
 func (c *client) Run(ctx context.Context) (err error) {
 	addr, err := net.ResolveUDPAddr("udp", c.address)
 	if err != nil {
-		return
+		return err
 	}
 
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		return
+		return err
 	}
 	defer conn.Close()
+	rawConn, err := conn.SyscallConn()
+	if err != nil {
+		return err
+	}
+	err = rawConn.Control(func(fd uintptr) {
+		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
+		if err != nil {
+			log.Error().Err(err).
+				Msg("Could not set socket option broadcast")
+		}
+	})
+	if err != nil {
+		return err
+	}
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
