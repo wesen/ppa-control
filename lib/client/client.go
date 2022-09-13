@@ -9,7 +9,9 @@ import (
 	"golang.org/x/sync/errgroup"
 	"io"
 	"net"
+	"os"
 	"ppa-control/lib/protocol"
+	"syscall"
 	"time"
 )
 
@@ -128,7 +130,19 @@ func (c *client) Run(ctx context.Context) (err error) {
 			// Block on read
 			nRead, addr, err := conn.ReadFrom(buffer)
 			if err != nil {
-				return err
+				switch v := err.(type) {
+				case *net.OpError:
+					switch v2 := v.Err.(type) {
+					case *os.SyscallError:
+						if v2.Syscall == "recvfrom" && v2.Err == syscall.ECONNREFUSED {
+							log.Warn().Msg("Connection refused")
+						}
+					default:
+					}
+				default:
+				}
+				log.Warn().Err(err).Msg("Failed to read from connection")
+				// ignore errors anyway
 			}
 
 			log.Info().Int("received", nRead).
@@ -151,6 +165,7 @@ func (c *client) Run(ctx context.Context) (err error) {
 				// Send
 				n, err := io.Copy(conn, buf)
 				if err != nil {
+					log.Error().Err(err).Msg("Failed to write to connection")
 					return err
 				}
 				log.Info().
