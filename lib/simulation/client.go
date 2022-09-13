@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"net"
+	"net/netip"
 	"ppa-control/lib/protocol"
 	"time"
 )
@@ -18,8 +19,18 @@ const Timeout = 10 * time.Second
 type Preset struct {
 }
 
+type Response struct {
+	Buffer   *bytes.Buffer
+	AddrPort netip.AddrPort
+}
+
+type Request struct {
+	Buffer   *bytes.Buffer
+	AddrPort netip.AddrPort
+}
+
 type client struct {
-	SendChannel           chan *bytes.Buffer
+	SendChannel           chan Response
 	ReceiveChannel        chan *bytes.Buffer
 	deviceUniqueId        [4]byte
 	componentId           byte
@@ -32,7 +43,7 @@ type client struct {
 
 func NewClient(address string, name string, deviceUniqueId [4]byte, componentId byte) *client {
 	return &client{
-		SendChannel:           make(chan *bytes.Buffer),
+		SendChannel:           make(chan Response),
 		ReceiveChannel:        make(chan *bytes.Buffer),
 		deviceUniqueId:        deviceUniqueId,
 		componentId:           componentId,
@@ -55,12 +66,6 @@ func (c *client) Run(ctx context.Context) (err error) {
 	}
 	defer conn.Close()
 
-	deadline := time.Now().Add(Timeout)
-	err = conn.SetWriteDeadline(deadline)
-	if err != nil {
-		return err
-	}
-
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
 		defer func() {
@@ -70,52 +75,119 @@ func (c *client) Run(ctx context.Context) (err error) {
 		for {
 			buffer := make([]byte, MaxBufferSize)
 
-			n, _, err := conn.ReadFromUDP(buffer)
+			log.Debug().
+				Str("address", conn.LocalAddr().String()).
+				Msg("Waiting for data")
+
+			//deadline := time.Now().Add(Timeout)
+			//err = conn.SetReadDeadline(deadline)
+			//if err != nil {
+			//	log.Warn().
+			//		Err(err).
+			//		Msg("Could not set read deadline")
+			//}
+
+			n, srcAddr, err := conn.ReadFromUDP(buffer)
 			if err != nil {
 				log.Error().Str("error", err.Error()).Msg("Could not read from UDP")
 				return err
 			}
 
 			log.Info().Int("received", n).
-				Str("from", addr.String()).
+				Str("from", srcAddr.String()).
+				Str("local", conn.LocalAddr().String()).
 				Msg("Received packet")
 			fmt.Printf("%s\n", hexdump.Dump(buffer[:n]))
+
+			request := &Request{
+				Buffer:   bytes.NewBuffer(buffer[:n]),
+				AddrPort: srcAddr.AddrPort(),
+			}
 
 			if n > 0 {
 
 				switch protocol.MessageType(buffer[0]) {
 				case protocol.MessageTypePing:
 					{
-						err := c.handlePing(buffer)
+						err := c.handlePing(request)
 						if err != nil {
 							log.Warn().Str("error", err.Error()).Msg("Could not handle ping")
 						}
 					}
 				case protocol.MessageTypeLiveCmd:
+					{
+						err := c.handleLiveCmd(request)
+						if err != nil {
+							log.Warn().Str("error", err.Error()).Msg("Could not handle live command")
+						}
+					}
 				case protocol.MessageTypeDeviceData:
+					{
+						err := c.handleDeviceData(request)
+						if err != nil {
+							log.Warn().Str("error", err.Error()).Msg("Could not handle device data")
+						}
+					}
 				case protocol.MessageTypePresetRecall:
+					{
+						err := c.handlePresetRecall(request)
+						if err != nil {
+							log.Warn().Str("error", err.Error()).Msg("Could not handle preset recall")
+						}
+					}
 				case protocol.MessageTypePresetSave:
+					{
+						err := c.handlePresetSave(request)
+						if err != nil {
+							log.Warn().Str("error", err.Error()).Msg("Could not handle preset save")
+						}
+					}
 				case protocol.MessageTypeUnknown:
 				}
-				c.ReceiveChannel <- bytes.NewBuffer(buffer[:n])
 			}
 		}
 	})
 
 	grp.Go(func() error {
+		defer func() {
+			log.Info().Msg("write-loop exiting\n")
+		}()
 		for {
 			select {
 			case <-ctx.Done():
 				log.Info().Msg("write-loop exiting")
 				return ctx.Err()
 
-			case buf := <-c.SendChannel:
+			case response := <-c.SendChannel:
 				// Send
-				n, err := conn.Write(buf.Bytes())
+				log.Debug().
+					Int("len", response.Buffer.Len()).
+					Bytes("data", response.Buffer.Bytes()).
+					Msg("Sending packet")
+
+				deadline := time.Now().Add(Timeout)
+				err = conn.SetWriteDeadline(deadline)
 				if err != nil {
 					return err
 				}
-				log.Info().Int("bytes", n).Msg("Wrote packet")
+				n, err := conn.WriteToUDPAddrPort(response.Buffer.Bytes(), response.AddrPort)
+				if err != nil {
+					log.Warn().
+						Err(err).
+						Str("to", response.AddrPort.String()).
+						Str("local", conn.LocalAddr().String()).
+						Int("length", response.Buffer.Len()).
+						Bytes("data", response.Buffer.Bytes()).
+						Msg("Could not write to UDP")
+				} else {
+					log.Info().
+						Str("to", response.AddrPort.String()).
+						Str("local", conn.LocalAddr().String()).
+						Int("length", response.Buffer.Len()).
+						Bytes("data", response.Buffer.Bytes()).
+						Int("written", n).
+						Msg("Wrote packet")
+				}
 			}
 		}
 	})
@@ -125,8 +197,8 @@ func (c *client) Run(ctx context.Context) (err error) {
 	return err
 }
 
-func (c *client) handlePing(buffer []byte) error {
-	hdr, err := protocol.ParseHeader(buffer)
+func (c *client) handlePing(req *Request) error {
+	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
 		return err
@@ -146,7 +218,129 @@ func (c *client) handlePing(buffer []byte) error {
 		return err
 	}
 
-	c.SendChannel <- buf
+	c.SendChannel <- Response{
+		Buffer:   buf,
+		AddrPort: req.AddrPort,
+	}
 
 	return nil
+}
+
+func (c *client) handleLiveCmd(req *Request) error {
+	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
+		return err
+	}
+
+	response := protocol.NewBasicHeader(
+		protocol.MessageTypePing,
+		protocol.StatusResponseServer,
+		c.deviceUniqueId,
+		hdr.SequenceNumber,
+		c.componentId)
+
+	buf := new(bytes.Buffer)
+	err = protocol.EncodeHeader(buf, response)
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not encode header")
+		return err
+	}
+
+	c.SendChannel <- Response{
+		Buffer:   buf,
+		AddrPort: req.AddrPort,
+	}
+
+	return nil
+}
+
+func (c *client) handleDeviceData(req *Request) error {
+	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
+		return err
+	}
+
+	response := protocol.NewBasicHeader(
+		protocol.MessageTypePing,
+		protocol.StatusResponseServer,
+		c.deviceUniqueId,
+		hdr.SequenceNumber,
+		c.componentId)
+
+	buf := new(bytes.Buffer)
+	err = protocol.EncodeHeader(buf, response)
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not encode header")
+		return err
+	}
+
+	c.SendChannel <- Response{
+		Buffer:   buf,
+		AddrPort: req.AddrPort,
+	}
+
+	return nil
+
+}
+
+func (c *client) handlePresetRecall(req *Request) error {
+	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
+		return err
+	}
+
+	response := protocol.NewBasicHeader(
+		protocol.MessageTypePing,
+		protocol.StatusResponseServer,
+		c.deviceUniqueId,
+		hdr.SequenceNumber,
+		c.componentId)
+
+	buf := new(bytes.Buffer)
+	err = protocol.EncodeHeader(buf, response)
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not encode header")
+		return err
+	}
+
+	c.SendChannel <- Response{
+		Buffer:   buf,
+		AddrPort: req.AddrPort,
+	}
+
+	return nil
+
+}
+
+func (c *client) handlePresetSave(req *Request) error {
+	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
+		return err
+	}
+
+	response := protocol.NewBasicHeader(
+		protocol.MessageTypePing,
+		protocol.StatusResponseServer,
+		c.deviceUniqueId,
+		hdr.SequenceNumber,
+		c.componentId)
+
+	buf := new(bytes.Buffer)
+	err = protocol.EncodeHeader(buf, response)
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not encode header")
+		return err
+	}
+
+	c.SendChannel <- Response{
+		Buffer:   buf,
+		AddrPort: req.AddrPort,
+	}
+
+	return nil
+
 }
