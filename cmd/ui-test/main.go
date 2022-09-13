@@ -28,18 +28,18 @@ var (
 func main() {
 	flag.Parse()
 	serverString := fmt.Sprintf("%s:%d", *address, *port)
-	var c client.Client
+	var clients []client.Client
 	if *addresses != "" {
-		var clients []client.Client
 		for _, addr := range strings.Split(*addresses, ",") {
 			log.Info().Msgf("adding client %s", addr)
 			c2 := client.NewClient(fmt.Sprintf("%v:%d", addr, *port), *componentId)
 			clients = append(clients, c2)
 		}
-		c = client.NewMultiClient(clients)
 	} else {
-		c = client.NewClient(serverString, *componentId)
+		c2 := client.NewClient(serverString, *componentId)
+		clients = append(clients, c2)
 	}
+	c := client.NewMultiClient(clients)
 
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
@@ -138,6 +138,9 @@ func main() {
 	grp, ctx2 := errgroup.WithContext(ctx)
 	grp.Go(func() error {
 		return c.Run(ctx2)
+	})
+	grp.Go(func() error {
+		return c.RunPingLoop(ctx2)
 	})
 	go func() {
 		log.Debug().Msg("Waiting for main loop")

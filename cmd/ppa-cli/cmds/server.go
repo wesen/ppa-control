@@ -34,6 +34,6 @@ var serverCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(serverCmd)
-	serverCmd.PersistentFlags().StringP("address", "a", "localhost", "Address to listen on")
+	serverCmd.PersistentFlags().StringP("address", "a", "localhost", "AddrPort to listen on")
 	serverCmd.PersistentFlags().UintP("port", "p", 5005, "Port to listen on")
 }
