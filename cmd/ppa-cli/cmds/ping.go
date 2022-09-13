@@ -3,17 +3,17 @@ package cmds
 import (
 	"context"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"ppa-control/lib/client"
-	logger "ppa-control/lib/log"
 	"ppa-control/lib/utils"
 	"strings"
 )
 
 var pingCmd = &cobra.Command{
 	Use:   "ping",
-	Short: "Ping one or multiple PPA servers",
+	Short: "SendPing one or multiple PPA servers",
 	Run: func(cmd *cobra.Command, args []string) {
 		var discoveryAddrs []string
 
@@ -25,7 +25,7 @@ var pingCmd = &cobra.Command{
 		if discoveryAddresses == "*" {
 			localAddresses, err := utils.GetLocalMulticastAddresses()
 			if err != nil {
-				logger.Sugar.Error("error", err.Error())
+				log.Error().Err(err).Msg("failed to get multicast addresses")
 				return
 			}
 
@@ -58,7 +58,7 @@ var pingCmd = &cobra.Command{
 
 		err := grp.Wait()
 		if err != nil {
-			logger.Sugar.Error("error", err.Error())
+			log.Error().Err(err).Msg("Error running multiclient")
 			return
 		}
 	},
