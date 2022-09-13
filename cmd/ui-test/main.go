@@ -125,11 +125,12 @@ func main() {
 		return c.Run(ctx2)
 	})
 	go func() {
-		log.Info().Msg("Waiting for main loop")
+		log.Debug().Msg("Waiting for main loop")
 		err := grp.Wait()
-		log.Info().Msg("Waited for main loop")
+		log.Debug().Msg("Waited for main loop")
+
 		if err != nil {
-			log.Printf("Error in main loop: %v\n", err)
+			log.Error().Err(err).Msg("Error in main loop")
 		}
 	}()
 
