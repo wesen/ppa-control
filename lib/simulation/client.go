@@ -3,6 +3,7 @@ package simulation
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/augustoroman/hexdump"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -56,7 +57,6 @@ func (c *client) Run(ctx context.Context) (err error) {
 
 	deadline := time.Now().Add(Timeout)
 	err = conn.SetWriteDeadline(deadline)
-	err = conn.SetReadDeadline(deadline)
 	if err != nil {
 		return err
 	}
@@ -78,8 +78,8 @@ func (c *client) Run(ctx context.Context) (err error) {
 
 			log.Info().Int("received", n).
 				Str("from", addr.String()).
-				Str("buffer", hexdump.Dump(buffer[:n])).
-				Msg("Eeceived packet")
+				Msg("Received packet")
+			fmt.Printf("%s\n", hexdump.Dump(buffer[:n]))
 
 			if n > 0 {
 
@@ -107,6 +107,7 @@ func (c *client) Run(ctx context.Context) (err error) {
 			select {
 			case <-ctx.Done():
 				log.Info().Msg("write-loop exiting")
+				return ctx.Err()
 
 			case buf := <-c.SendChannel:
 				// Send

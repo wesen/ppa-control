@@ -21,7 +21,7 @@ const Timeout = 10 * time.Second
 type Client interface {
 	Run(ctx context.Context) error
 	SendPresetRecallByPresetIndex(index int)
-	Ping()
+	SendPing()
 }
 
 type client struct {
@@ -50,7 +50,7 @@ func NewMultiClient(clients []Client) *multiClient {
 	return &multiClient{clients: clients}
 }
 
-func (c *client) Ping() {
+func (c *client) SendPing() {
 	buf := new(bytes.Buffer)
 	bh := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
@@ -72,7 +72,7 @@ func (c *client) Ping() {
 
 func (mc *multiClient) SendPing() {
 	for _, c := range mc.clients {
-		c.Ping()
+		c.SendPing()
 	}
 }
 
@@ -99,6 +99,7 @@ func (c *client) SendPresetRecallByPresetIndex(index int) {
 		log.Warn().Str("error", err.Error()).Msg("Failed to encode preset recall")
 		return
 	}
+	log.Debug().Str("address", c.Address).Msg("Sending preset recall")
 	c.SendChannel <- buf
 }
 
@@ -119,6 +120,12 @@ func (c *client) Run(ctx context.Context) (err error) {
 		return
 	}
 	defer conn.Close()
+
+	deadline := time.Now().Add(Timeout)
+	err = conn.SetWriteDeadline(deadline)
+	if err != nil {
+		return err
+	}
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
@@ -157,8 +164,6 @@ func (c *client) Run(ctx context.Context) (err error) {
 			select {
 			case <-ctx.Done():
 				fmt.Println("client.go: cancelled")
-				// XXX I guess we could close the socket here
-				conn.Close()
 				return ctx.Err()
 
 			case buf := <-c.SendChannel:
@@ -175,15 +180,16 @@ func (c *client) Run(ctx context.Context) (err error) {
 		}
 	})
 
+	log.Info().Str("address", c.Address).Msg("Client started")
 	return grp.Wait()
 }
 
 func (c *multiClient) Run(ctx context.Context) (err error) {
 	grp, ctx := errgroup.WithContext(ctx)
 
-	for _, c := range c.clients {
+	for _, c2 := range c.clients {
 		grp.Go(func() error {
-			return c.Run(ctx)
+			return c2.Run(ctx)
 		})
 	}
 	return grp.Wait()

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+	"ppa-control/lib/simulation"
 )
 
 var serverCmd = &cobra.Command{
@@ -18,6 +19,11 @@ var serverCmd = &cobra.Command{
 		fmt.Printf("Starting server on %s\n", serverString)
 
 		grp, ctx := errgroup.WithContext(ctx)
+
+		client := simulation.NewClient(serverString, "SimulatedClient", [4]byte{0, 1, 2, 3}, 0xFF)
+		grp.Go(func() error {
+			return client.Run(ctx)
+		})
 
 		err := grp.Wait()
 		if err != nil {

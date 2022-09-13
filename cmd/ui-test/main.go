@@ -10,23 +10,38 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
+	log "github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"image/color"
 	"ppa-control/lib/client"
+	"strings"
 )
 
 var (
-	address        = flag.String("address", "127.0.0.1", "server address")
-	port           = flag.Uint("port", 5005, "server port")
-	presetPosition = flag.Int("position", 1, "preset")
-	componentId    = flag.Int("component-id", 0xff, "component ID (default: 0xff)")
+	address     = flag.String("address", "127.0.0.1", "board address")
+	port        = flag.Uint("port", 5005, "default port")
+	addresses   = flag.String("addresses", "", "multiple board addresses")
+	componentId = flag.Int("component-id", 0xff, "default component ID (default: 0xff)")
 )
 
 func main() {
 	flag.Parse()
 	serverString := fmt.Sprintf("%s:%d", *address, *port)
-	c := client.NewClient(serverString, *componentId)
+	var c client.Client
+	if *addresses != "" {
+		var clients []client.Client
+		for _, addr := range strings.Split(*addresses, ",") {
+			log.Info().Msgf("adding client %s", addr)
+			c2 := client.NewClient(fmt.Sprintf("%v:%d", addr, *port), *componentId)
+			clients = append(clients, c2)
+		}
+		c = client.NewMultiClient(clients)
+	} else {
+		c = client.NewClient(serverString, *componentId)
+	}
+
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
 	a := app.New()
 	w := a.NewWindow("ppa-control")
