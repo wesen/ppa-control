@@ -10,18 +10,15 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"image/color"
-	"log"
 	"ppa-control/lib/client"
-	"ppa-control/lib/server"
-	"time"
 )
 
 var (
 	address        = flag.String("address", "127.0.0.1", "server address")
-	port           = flag.Uint("port", 5001, "server port")
-	runServer      = flag.Bool("run-server", false, "Run as server too")
+	port           = flag.Uint("port", 5005, "server port")
 	presetPosition = flag.Int("position", 1, "preset")
 	componentId    = flag.Int("component-id", 0xff, "component ID (default: 0xff)")
 )
@@ -48,7 +45,7 @@ func main() {
 		presetButtons[i] = widget.NewButton(fmt.Sprintf("Preset %d", i+1),
 			func() {
 				c.SendPresetRecallByPresetIndex(j)
-				log.Println(fmt.Sprintf("Preset %d clicked", j+1))
+				log.Info().Msg(fmt.Sprintf("Preset %d clicked", j+1))
 			})
 	}
 	presetButtonContainer := container.New(layout.NewGridLayout(4), presetButtons...)
@@ -58,23 +55,23 @@ func main() {
 		j := i
 		controlButtons[i] = widget.NewButton(fmt.Sprintf("Control %d", i+1),
 			func() {
-				log.Println(fmt.Sprintf("Control %d clicked", j))
+				log.Info().Msg(fmt.Sprintf("Control %d clicked", j))
 			})
 	}
 	controlButtonContainer := container.New(layout.NewGridLayout(4), controlButtons...)
 
 	var volumeButtons = make([]fyne.CanvasObject, 4)
 	volumeButtons[0] = widget.NewButton("High", func() {
-		log.Println("Volume HIGH")
+		log.Info().Msg("Volume HIGH")
 	})
 	volumeButtons[1] = widget.NewButton("Mid", func() {
-		log.Println("Volume MID")
+		log.Info().Msg("Volume MID")
 	})
 	volumeButtons[2] = widget.NewButton("Low", func() {
-		log.Println("Volume LOW")
+		log.Info().Msg("Volume LOW")
 	})
 	volumeButtons[3] = widget.NewButton("Mute", func() {
-		log.Println("Volume MUTE TOGGLE")
+		log.Info().Msg("Volume MUTE TOGGLE")
 	})
 	volumeContainer := container.New(layout.NewVBoxLayout(), volumeButtons...)
 
@@ -102,7 +99,7 @@ func main() {
 	masterSlider.Orientation = widget.Vertical
 	masterSlider.MinSize()
 	masterSlider.OnChanged = func(value float64) {
-		log.Println(fmt.Sprintf("Master Volume: %f", value))
+		log.Info().Float64("volume", value).Msg("Master Volume")
 	}
 	sliderContainer := container.New(layout.NewBorderLayout(
 		//container.NewVBox(masterTitle, widget.NewSeparator()),
@@ -117,16 +114,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	fmt.Printf("Connecting to %s\n", serverString)
 
-	if *runServer {
-		fmt.Printf("Starting test server")
-		go server.RunServer(ctx, serverString)
-		time.Sleep(1 * time.Second)
-	}
-
 	w.SetOnClosed(func() {
-		log.Println("Closing")
+		log.Info().Msg("Closing")
 		cancel()
-		log.Println("After cancel")
+		log.Info().Msg("After cancel")
 	})
 
 	grp, ctx2 := errgroup.WithContext(ctx)
@@ -134,9 +125,9 @@ func main() {
 		return c.Run(ctx2)
 	})
 	go func() {
-		log.Println("Waiting for main loop")
+		log.Info().Msg("Waiting for main loop")
 		err := grp.Wait()
-		log.Println("Waited for main loop")
+		log.Info().Msg("Waited for main loop")
 		if err != nil {
 			log.Printf("Error in main loop: %v\n", err)
 		}
