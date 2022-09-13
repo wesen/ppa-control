@@ -1,8 +1,9 @@
 package utils
 
 import (
+	"fmt"
+	"github.com/rs/zerolog/log"
 	"net"
-	logger "ppa-control/lib/log"
 )
 
 func GetLocalAddresses() ([]*net.IPAddr, error) {
@@ -10,23 +11,24 @@ func GetLocalAddresses() ([]*net.IPAddr, error) {
 
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		logger.Sugar.Error("error", err.Error())
+		log.Error().Str("error", err.Error()).Msg("Could not list interfaces")
 		return nil, err
 	}
 	for _, i := range ifaces {
 		addrs, err := i.Addrs()
 		if err != nil {
-			logger.Sugar.Warn("error", err.Error())
+			log.Error().Str("error", err.Error()).Msg("Could not get interface addresses")
 			continue
 		}
 		for _, a := range addrs {
 			switch v := a.(type) {
 			case *net.IPAddr:
 				res = append(res, v)
-				logger.Sugar.Info(
-					"interface", i.Name,
-					"address", v.String(),
-					"defaultMask", v.IP.DefaultMask())
+				log.Info().
+					Str("interface", i.Name).
+					Str("address", v.String()).
+					Str("defaultMask", fmt.Sprintf("%x\n", v.IP.DefaultMask())).
+					Msg("found interface")
 			}
 		}
 	}
@@ -39,23 +41,24 @@ func GetLocalMulticastAddresses() ([]*net.IPAddr, error) {
 
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		logger.Sugar.Error("error", err.Error())
+		log.Error().Str("error", err.Error()).Msg("Could not list interfaces")
 		return nil, err
 	}
 	for _, i := range ifaces {
 		addrs, err := i.Addrs()
 		if err != nil {
-			logger.Sugar.Warn("error", err.Error())
+			log.Warn().Str("error", err.Error()).Msg("Could not get addresses for interface")
 			continue
 		}
 		for _, a := range addrs {
 			switch v := a.(type) {
 			case *net.IPAddr:
 				res = append(res, v)
-				logger.Sugar.With(
-					"interface", i.Name,
-					"address", v.String(),
-					"defaultMask", v.IP.DefaultMask()).Info("found interface")
+				log.Info().
+					Str("interface", i.Name).
+					Str("address", v.String()).
+					Str("defaultMask", fmt.Sprintf("%x\n", v.IP.DefaultMask())).
+					Msg("found interface")
 			}
 		}
 	}

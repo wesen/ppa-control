@@ -5,9 +5,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/augustoroman/hexdump"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"io"
-	"log"
 	"net"
 	"ppa-control/lib/protocol"
 	"time"
@@ -60,7 +60,11 @@ func (c *client) Ping() {
 
 	c.seqCmd++
 
-	protocol.EncodeHeader(buf, bh)
+	err := protocol.EncodeHeader(buf, bh)
+	if err != nil {
+		log.Warn().Str("error", err.Error()).Msg("Failed to encode header")
+		return
+	}
 	c.SendChannel <- buf
 }
 
@@ -83,8 +87,16 @@ func (c *client) SendPresetRecallByPresetIndex(index int) {
 	// XXX potentially need mutex here
 	c.seqCmd += 1
 
-	protocol.EncodeHeader(buf, bh)
-	protocol.EncodePresetRecall(buf, pr)
+	err := protocol.EncodeHeader(buf, bh)
+	if err != nil {
+		log.Warn().Str("error", err.Error()).Msg("Failed to encode header")
+		return
+	}
+	err = protocol.EncodePresetRecall(buf, pr)
+	if err != nil {
+		log.Warn().Str("error", err.Error()).Msg("Failed to encode preset recall")
+		return
+	}
 	c.SendChannel <- buf
 }
 
@@ -113,20 +125,16 @@ func (c *client) Run(ctx context.Context) (err error) {
 		}()
 		for {
 			buffer := make([]byte, MaxBufferSize)
-			//deadline := time.Now().Add(Timeout)
-			//err = conn.SetReadDeadline(deadline)
-			//if err != nil {
-			//	return err
-			//}
-
 			// Block on read
 			nRead, addr, err := conn.ReadFrom(buffer)
 			if err != nil {
 				return err
 			}
 
-			fmt.Printf("client.go: packet-received: bytes=%d from=%s\nclient.go: %s\n",
-				nRead, addr.String(), hexdump.Dump(buffer[:nRead]))
+			log.Info().Int("received", nRead).
+				Str("from", addr.String()).
+				Str("buffer", hexdump.Dump(buffer[:nRead])).
+				Msg("Received packet")
 		}
 	})
 
@@ -145,7 +153,9 @@ func (c *client) Run(ctx context.Context) (err error) {
 				if err != nil {
 					return err
 				}
-				fmt.Printf("client.go: packet-written: bytes=%d\n", n)
+				log.Info().
+					Int64("written", n).
+					Msg("Written packet")
 			}
 		}
 	})
