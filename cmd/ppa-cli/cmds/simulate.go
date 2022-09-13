@@ -8,15 +8,15 @@ import (
 	"ppa-control/lib/simulation"
 )
 
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Starts a PPA server",
+var simulateCmd = &cobra.Command{
+	Use:   "simulate",
+	Short: "Starts a simulated PPA device",
 	Run: func(cmd *cobra.Command, args []string) {
 		address, _ := cmd.PersistentFlags().GetString("address")
 		port, _ := cmd.PersistentFlags().GetUint("port")
 		ctx := context.Background()
 		serverString := fmt.Sprintf("%s:%d", address, port)
-		fmt.Printf("Starting server on %s\n", serverString)
+		fmt.Printf("Starting simulated PPA device on %s\n", serverString)
 
 		grp, ctx := errgroup.WithContext(ctx)
 
@@ -33,7 +33,7 @@ var serverCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(serverCmd)
-	serverCmd.PersistentFlags().StringP("address", "a", "localhost", "AddrPort to listen on")
-	serverCmd.PersistentFlags().UintP("port", "p", 5005, "Port to listen on")
+	rootCmd.AddCommand(simulateCmd)
+	simulateCmd.PersistentFlags().StringP("address", "a", "localhost", "AddrPort to listen on")
+	simulateCmd.PersistentFlags().UintP("port", "p", 5005, "Port to listen on")
 }
