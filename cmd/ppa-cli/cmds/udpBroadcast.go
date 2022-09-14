@@ -27,13 +27,15 @@ var udpBroadcastCommand = &cobra.Command{
 
 		if server {
 			fmt.Printf("Listening on %s\n", pc.LocalAddr().String())
-			buf := make([]byte, 1024)
-			n, addr, err := pc.ReadFrom(buf)
-			if err != nil {
-				panic(err)
-			}
+			for {
+				buf := make([]byte, 1024)
+				n, addr, err := pc.ReadFrom(buf)
+				if err != nil {
+					panic(err)
+				}
 
-			fmt.Printf("%s sent this: %s\n", addr, buf[:n])
+				fmt.Printf("%s sent this: %s\n", addr, buf[:n])
+			}
 		} else {
 			dstAddr := fmt.Sprintf("%s:%d", address, port)
 			addr, err := net.ResolveUDPAddr("udp4", dstAddr)
