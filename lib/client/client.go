@@ -203,7 +203,7 @@ func (c *SingleDevice) Run(ctx context.Context) (err error) {
 							Bytes("data", buf.Bytes()).
 							Msg("Failed to write to connection")
 					} else {
-						log.Info().
+						log.Debug().
 							Str("to", c.Address).
 							Str("from", conn.LocalAddr().String()).
 							Int("length", buf.Len()).
