@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"ppa-control/lib/client"
-	"ppa-control/lib/utils"
 	"strings"
 )
 
@@ -15,28 +14,12 @@ var pingCmd = &cobra.Command{
 	Use:   "ping",
 	Short: "SendPing one or multiple PPA servers",
 	Run: func(cmd *cobra.Command, args []string) {
-		var discoveryAddrs []string
 
 		addresses, _ := cmd.PersistentFlags().GetString("addresses")
-		discoveryAddresses, _ := cmd.PersistentFlags().GetString("discover")
+		discovery, _ := cmd.PersistentFlags().GetBool("discover")
 		componentId, _ := cmd.PersistentFlags().GetUint("componentId")
 
 		port, _ := cmd.PersistentFlags().GetUint("port")
-		if discoveryAddresses == "*" {
-			localAddresses, err := utils.GetLocalMulticastAddresses()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to get multicast addresses")
-				return
-			}
-
-			for _, addr := range localAddresses {
-				discoveryAddrs = append(discoveryAddrs, fmt.Sprintf("%s:%d", addr.String(), port))
-			}
-		} else {
-			for _, addr := range strings.Split(discoveryAddresses, ",") {
-				discoveryAddrs = append(discoveryAddrs, fmt.Sprintf("%s:%d", addr, port))
-			}
-		}
 
 		var clients []client.Client
 		for _, addr := range strings.Split(addresses, ",") {
@@ -46,9 +29,9 @@ var pingCmd = &cobra.Command{
 		ctx := context.Background()
 		grp, ctx := errgroup.WithContext(ctx)
 
-		if len(discoveryAddrs) > 0 {
+		if discovery {
 			grp.Go(func() error {
-				return multiClient.Discover(discoveryAddrs)
+				return multiClient.Discover(ctx, uint16(port))
 			})
 		}
 
@@ -70,9 +53,9 @@ func init() {
 		"addresses", "a", "",
 		"Addresses to ping, comma separated",
 	)
-	pingCmd.PersistentFlags().StringP(
-		"discover", "d", "",
-		"Addresses to use as discovery targets, use * for all local interfaces, comma separated",
+	pingCmd.PersistentFlags().BoolP(
+		"discover", "d", true,
+		"Send broadcast discovery messages",
 	)
 	pingCmd.PersistentFlags().UintP(
 		"componentId", "c", 0xFF,
