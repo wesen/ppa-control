@@ -30,7 +30,7 @@ type Request struct {
 	AddrPort netip.AddrPort
 }
 
-type client struct {
+type SimulatedDevice struct {
 	SendChannel           chan Response
 	ReceiveChannel        chan *bytes.Buffer
 	deviceUniqueId        [4]byte
@@ -42,8 +42,8 @@ type client struct {
 	currentVolume         float32
 }
 
-func NewClient(address string, name string, deviceUniqueId [4]byte, componentId byte) *client {
-	return &client{
+func NewClient(address string, name string, deviceUniqueId [4]byte, componentId byte) *SimulatedDevice {
+	return &SimulatedDevice{
 		SendChannel:           make(chan Response),
 		ReceiveChannel:        make(chan *bytes.Buffer),
 		deviceUniqueId:        deviceUniqueId,
@@ -55,7 +55,7 @@ func NewClient(address string, name string, deviceUniqueId [4]byte, componentId 
 	}
 }
 
-func (c *client) Run(ctx context.Context) (err error) {
+func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 	addr, err := net.ResolveUDPAddr("udp", c.address)
 	if err != nil {
 		return err
@@ -82,6 +82,7 @@ func (c *client) Run(ctx context.Context) (err error) {
 		return err
 	}
 
+	// TODO add proper passing of interface name by using a settings builder pattern
 	ifname := ""
 
 	if ifname != "" {
@@ -228,11 +229,11 @@ func (c *client) Run(ctx context.Context) (err error) {
 	})
 
 	err = grp.Wait()
-	log.Info().Msg("Exiting client loop")
+	log.Info().Msg("Exiting SimulatedDevice loop")
 	return err
 }
 
-func (c *client) handlePing(req *Request) error {
+func (c *SimulatedDevice) handlePing(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
@@ -261,7 +262,7 @@ func (c *client) handlePing(req *Request) error {
 	return nil
 }
 
-func (c *client) handleLiveCmd(req *Request) error {
+func (c *SimulatedDevice) handleLiveCmd(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
@@ -290,37 +291,7 @@ func (c *client) handleLiveCmd(req *Request) error {
 	return nil
 }
 
-func (c *client) handleDeviceData(req *Request) error {
-	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
-	if err != nil {
-		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
-		return err
-	}
-
-	response := protocol.NewBasicHeader(
-		protocol.MessageTypePing,
-		protocol.StatusResponseServer,
-		c.deviceUniqueId,
-		hdr.SequenceNumber,
-		c.componentId)
-
-	buf := new(bytes.Buffer)
-	err = protocol.EncodeHeader(buf, response)
-	if err != nil {
-		log.Error().Str("error", err.Error()).Msg("Could not encode header")
-		return err
-	}
-
-	c.SendChannel <- Response{
-		Buffer:   buf,
-		AddrPort: req.AddrPort,
-	}
-
-	return nil
-
-}
-
-func (c *client) handlePresetRecall(req *Request) error {
+func (c *SimulatedDevice) handleDeviceData(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
@@ -350,7 +321,37 @@ func (c *client) handlePresetRecall(req *Request) error {
 
 }
 
-func (c *client) handlePresetSave(req *Request) error {
+func (c *SimulatedDevice) handlePresetRecall(req *Request) error {
+	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
+		return err
+	}
+
+	response := protocol.NewBasicHeader(
+		protocol.MessageTypePing,
+		protocol.StatusResponseServer,
+		c.deviceUniqueId,
+		hdr.SequenceNumber,
+		c.componentId)
+
+	buf := new(bytes.Buffer)
+	err = protocol.EncodeHeader(buf, response)
+	if err != nil {
+		log.Error().Str("error", err.Error()).Msg("Could not encode header")
+		return err
+	}
+
+	c.SendChannel <- Response{
+		Buffer:   buf,
+		AddrPort: req.AddrPort,
+	}
+
+	return nil
+
+}
+
+func (c *SimulatedDevice) handlePresetSave(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")

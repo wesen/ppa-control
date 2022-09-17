@@ -10,7 +10,6 @@ import (
 	"net"
 	"os"
 	"ppa-control/lib/protocol"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -25,49 +24,35 @@ type Client interface {
 	Name() string
 }
 
-type client struct {
-	Address        string
-	SendChannel    chan *bytes.Buffer
-	ReceiveChannel chan *bytes.Buffer
-	ComponentId    int
-	seqCmd         uint16
+type ReceivedMessage struct {
+	Header  *protocol.BasicHeader
+	Address net.Addr
+	Body    interface{}
 }
 
-type multiClient struct {
-	clients []Client
+type SingleDevice struct {
+	Address            string
+	SendChannel        chan *bytes.Buffer
+	ReceivedMessagesCh chan ReceivedMessage
+	ComponentId        int
+	seqCmd             uint16
 }
 
-func NewClient(address string, componentId int) *client {
-	return &client{
-		SendChannel:    make(chan *bytes.Buffer),
-		ReceiveChannel: make(chan *bytes.Buffer),
-		Address:        address,
-		ComponentId:    componentId,
-		seqCmd:         1,
+func NewClient(address string, componentId int) *SingleDevice {
+	return &SingleDevice{
+		SendChannel:        make(chan *bytes.Buffer),
+		ReceivedMessagesCh: make(chan ReceivedMessage),
+		Address:            address,
+		ComponentId:        componentId,
+		seqCmd:             1,
 	}
 }
 
-func NewMultiClient(clients []Client) *multiClient {
-	return &multiClient{clients: clients}
-}
-
-func (mc *multiClient) Name() string {
-	var names []string
-	for _, c := range mc.clients {
-		names = append(names, c.Name())
-	}
-	return "multiclient-" + strings.Join(names, ",")
-}
-
-func (c *client) Name() string {
-	return fmt.Sprintf("client-%s", c.Address)
-}
-
-func (c *client) SendPing() {
+func (c *SingleDevice) SendPing() {
 	buf := new(bytes.Buffer)
 	bh := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
-		protocol.StatusCommandClient,
+		protocol.StatusRequestServer,
 		[4]byte{0, 0, 0, 0},
 		c.seqCmd,
 		byte(c.ComponentId),
@@ -84,17 +69,11 @@ func (c *client) SendPing() {
 	c.SendChannel <- buf
 }
 
-func (mc *multiClient) SendPing() {
-	for _, c := range mc.clients {
-		c.SendPing()
-	}
-}
-
-func (c *client) SendPresetRecallByPresetIndex(index int) {
+func (c *SingleDevice) SendPresetRecallByPresetIndex(index int) {
 	buf := new(bytes.Buffer)
 	bh := protocol.NewBasicHeader(
 		protocol.MessageTypePresetRecall,
-		protocol.StatusCommandClient,
+		protocol.StatusRequestServer,
 		[4]byte{0, 0, 0, 0},
 		c.seqCmd,
 		byte(c.ComponentId),
@@ -117,13 +96,7 @@ func (c *client) SendPresetRecallByPresetIndex(index int) {
 	c.SendChannel <- buf
 }
 
-func (mc *multiClient) SendPresetRecallByPresetIndex(index int) {
-	for _, c := range mc.clients {
-		c.SendPresetRecallByPresetIndex(index)
-	}
-}
-
-func (c *client) Run(ctx context.Context) (err error) {
+func (c *SingleDevice) Run(ctx context.Context) (err error) {
 	raddr, err := net.ResolveUDPAddr("udp", c.Address)
 	if err != nil {
 		return
@@ -153,6 +126,8 @@ func (c *client) Run(ctx context.Context) (err error) {
 				Str("address", conn.LocalAddr().String()).
 				Msg("Reading from connection")
 
+			// TODO handle ctx cancellation
+
 			//deadline := time.Now().Add(Timeout)
 			//err = conn.SetReadDeadline(deadline)
 			//if err != nil {
@@ -180,6 +155,12 @@ func (c *client) Run(ctx context.Context) (err error) {
 				return err
 			}
 
+			c.ReceivedMessagesCh <- ReceivedMessage{
+				Header:  nil,
+				Address: addr,
+				Body:    buffer,
+			}
+
 			fmt.Printf("%s\n", hexdump.Dump(buffer[:nRead]))
 			log.Info().Int("received", nRead).
 				Str("from", addr.String()).
@@ -197,7 +178,7 @@ func (c *client) Run(ctx context.Context) (err error) {
 		for {
 			select {
 			case <-ctx.Done():
-				fmt.Println("client.go: cancelled")
+				fmt.Println("SingleDevice.go: cancelled")
 				return ctx.Err()
 
 			case buf := <-c.SendChannel:
@@ -240,14 +221,6 @@ func (c *client) Run(ctx context.Context) (err error) {
 	return grp.Wait()
 }
 
-func (c *multiClient) Run(ctx context.Context) (err error) {
-	grp, ctx := errgroup.WithContext(ctx)
-
-	for _, c2 := range c.clients {
-		c3 := c2
-		grp.Go(func() error {
-			return c3.Run(ctx)
-		})
-	}
-	return grp.Wait()
+func (c *SingleDevice) Name() string {
+	return fmt.Sprintf("SingleDevice-%s", c.Address)
 }

@@ -2,24 +2,54 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"time"
 )
 
-func (mc *multiClient) Discover(addresses []string) error {
-	return nil
+func (mc *MultiClient) Discover(ctx context.Context, port uint16) error {
+	broadcastAddr := fmt.Sprintf("255.255.255.255:%d", port)
+	c := NewClient(broadcastAddr, 0xfe)
+
+	grp, ctx := errgroup.WithContext(ctx)
+	grp.Go(func() error {
+		return c.Run(ctx)
+	})
+	grp.Go(func() error {
+		log.Debug().Msg("Starting discovery loop")
+		for {
+			t := time.NewTimer(5 * time.Second)
+
+			select {
+			case <-t.C:
+				c.SendPing()
+
+			case msg := <-c.ReceivedMessagesCh:
+				log.Debug().Str("from", msg.Address.String()).Msg("received message")
+
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
+
+	return grp.Wait()
 }
 
-func (mc *multiClient) RunPingLoop(ctx context.Context) error {
+func (mc *MultiClient) RunPingLoop(ctx context.Context) error {
 	grp, ctx2 := errgroup.WithContext(ctx)
+
+	// TODO we should do one goroutine per SingleDevice here, that reads and sends pings
+	// although the reading will interact with the main receive loop maybe?
+	// so the main loop for each SingleDevice will emit the parsed responses
 
 	grp.Go(func() error {
 		log.Info().Msg("ping-loop started")
 		for {
 			log.Debug().Msg("pinging clients")
 			for _, c := range mc.clients {
-				log.Debug().Str("client", c.Name()).Msg("pinging client")
+				log.Debug().Str("SingleDevice", c.Name()).Msg("pinging SingleDevice")
 				c.SendPing()
 			}
 
