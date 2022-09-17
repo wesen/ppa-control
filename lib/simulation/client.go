@@ -66,6 +66,7 @@ func (c *client) Run(ctx context.Context) (err error) {
 		return err
 	}
 	defer conn.Close()
+
 	rawConn, err := conn.SyscallConn()
 	if err != nil {
 		return err
@@ -79,6 +80,25 @@ func (c *client) Run(ctx context.Context) (err error) {
 	})
 	if err != nil {
 		return err
+	}
+
+	ifname := ""
+
+	if ifname != "" {
+		c, err := conn.SyscallConn()
+		if err != nil {
+			panic(err)
+		}
+		err = c.Control(func(fd uintptr) {
+			fmt.Printf("Binding socket %d to interface %s\n", fd, ifname)
+			err = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, ifname)
+			if err != nil {
+				panic(err)
+			}
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	grp, ctx := errgroup.WithContext(ctx)
