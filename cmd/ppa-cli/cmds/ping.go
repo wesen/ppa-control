@@ -36,7 +36,8 @@ var pingCmd = &cobra.Command{
 		}
 
 		grp.Go(func() error {
-			return multiClient.Run(ctx)
+			// TODO print out received messages
+			return multiClient.Run(ctx, nil)
 		})
 
 		err := grp.Wait()

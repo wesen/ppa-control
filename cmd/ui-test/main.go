@@ -137,7 +137,8 @@ func main() {
 
 	grp, ctx2 := errgroup.WithContext(ctx)
 	grp.Go(func() error {
-		return c.Run(ctx2)
+		// TODO handle incoming messages
+		return c.Run(ctx2, nil)
 	})
 	grp.Go(func() error {
 		return c.RunPingLoop(ctx2)

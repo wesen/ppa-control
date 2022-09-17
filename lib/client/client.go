@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/augustoroman/hexdump"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"net"
@@ -18,7 +19,7 @@ const MaxBufferSize = 1024
 const Timeout = 10 * time.Second
 
 type Client interface {
-	Run(ctx context.Context) error
+	Run(ctx context.Context, c *chan ReceivedMessage) error
 	SendPresetRecallByPresetIndex(index int)
 	SendPing()
 	Name() string
@@ -31,20 +32,18 @@ type ReceivedMessage struct {
 }
 
 type SingleDevice struct {
-	Address            string
-	SendChannel        chan *bytes.Buffer
-	ReceivedMessagesCh chan ReceivedMessage
-	ComponentId        int
-	seqCmd             uint16
+	Address     string
+	SendChannel chan *bytes.Buffer
+	ComponentId int
+	seqCmd      uint16
 }
 
 func NewClient(address string, componentId int) *SingleDevice {
 	return &SingleDevice{
-		SendChannel:        make(chan *bytes.Buffer),
-		ReceivedMessagesCh: make(chan ReceivedMessage),
-		Address:            address,
-		ComponentId:        componentId,
-		seqCmd:             1,
+		SendChannel: make(chan *bytes.Buffer),
+		Address:     address,
+		ComponentId: componentId,
+		seqCmd:      1,
 	}
 }
 
@@ -96,7 +95,9 @@ func (c *SingleDevice) SendPresetRecallByPresetIndex(index int) {
 	c.SendChannel <- buf
 }
 
-func (c *SingleDevice) Run(ctx context.Context) (err error) {
+// TODO we should probably pass the received message channel in here,
+// instead of making it part of the struct
+func (c *SingleDevice) Run(ctx context.Context, receivedCh *chan ReceivedMessage) (err error) {
 	raddr, err := net.ResolveUDPAddr("udp", c.Address)
 	if err != nil {
 		return
@@ -155,18 +156,39 @@ func (c *SingleDevice) Run(ctx context.Context) (err error) {
 				return err
 			}
 
-			c.ReceivedMessagesCh <- ReceivedMessage{
-				Header:  nil,
-				Address: addr,
-				Body:    buffer,
+			if zerolog.GlobalLevel() == zerolog.DebugLevel {
+				fmt.Printf("%s\n", hexdump.Dump(buffer[:nRead]))
 			}
-
-			fmt.Printf("%s\n", hexdump.Dump(buffer[:nRead]))
 			log.Info().Int("received", nRead).
 				Str("from", addr.String()).
 				Str("local", conn.LocalAddr().String()).
 				Bytes("data", buffer[:nRead]).
 				Msg("Received packet")
+
+			hdr, err := protocol.ParseHeader(buffer[:nRead])
+
+			if err != nil {
+				log.Warn().Err(err).
+					Bytes("payload", buffer[:nRead]).
+					Msg("Could not decode incoming message")
+
+				if receivedCh != nil {
+					*receivedCh <- ReceivedMessage{
+						Header:  nil,
+						Address: addr,
+						Body:    buffer[:nRead],
+					}
+				}
+				continue
+			}
+
+			if receivedCh != nil {
+				*receivedCh <- ReceivedMessage{
+					Header:  hdr,
+					Address: addr,
+					Body:    buffer[:nRead],
+				}
+			}
 		}
 	})
 
