@@ -17,6 +17,7 @@ var recallCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		addresses, _ := cmd.PersistentFlags().GetString("addresses")
 		discovery, _ := cmd.PersistentFlags().GetBool("discover")
+		loop, _ := cmd.PersistentFlags().GetBool("loop")
 		componentId, _ := cmd.PersistentFlags().GetUint("componentId")
 		preset, _ := cmd.PersistentFlags().GetInt("preset")
 
@@ -44,22 +45,23 @@ var recallCmd = &cobra.Command{
 		})
 
 		grp.Go(func() error {
-
 			multiClient.SendPresetRecallByPresetIndex(preset)
-			for {
-				preset = (preset + 1) % 5
-				t := time.NewTicker(5 * time.Second)
-				select {
-				case <-t.C:
-					multiClient.SendPresetRecallByPresetIndex(preset)
-				case msg := <-receivedCh:
-					if msg.Header != nil {
-						log.Info().Str("from", msg.Address.String()).
-							Str("type", msg.Header.MessageType.String()).
-							Str("status", msg.Header.Status.String()).
-							Msg("received message")
-					} else {
-						log.Debug().Str("from", msg.Address.String()).Msg("received unknown message")
+			if loop {
+				for {
+					preset = (preset + 1) % 5
+					t := time.NewTicker(5 * time.Second)
+					select {
+					case <-t.C:
+						multiClient.SendPresetRecallByPresetIndex(preset)
+					case msg := <-receivedCh:
+						if msg.Header != nil {
+							log.Info().Str("from", msg.Address.String()).
+								Str("type", msg.Header.MessageType.String()).
+								Str("status", msg.Header.Status.String()).
+								Msg("received message")
+						} else {
+							log.Debug().Str("from", msg.Address.String()).Msg("received unknown message")
+						}
 					}
 				}
 			}
@@ -86,6 +88,10 @@ func init() {
 	recallCmd.PersistentFlags().BoolP(
 		"discover", "d", true,
 		"Send broadcast discovery messages",
+	)
+	recallCmd.PersistentFlags().BoolP(
+		"loop", "l", true,
+		"Send recalls in a loop",
 	)
 	recallCmd.PersistentFlags().UintP(
 		"componentId", "c", 0xFF,
