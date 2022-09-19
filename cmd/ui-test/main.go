@@ -20,7 +20,7 @@ import (
 
 var (
 	address     = flag.String("address", "127.0.0.1", "board address")
-	port        = flag.Uint("port", 5005, "default port")
+	port        = flag.Uint("port", 5001, "default port")
 	addresses   = flag.String("addresses", "", "multiple board addresses")
 	componentId = flag.Int("component-id", 0xff, "default component ID (default: 0xff)")
 )

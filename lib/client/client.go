@@ -72,7 +72,7 @@ func (c *SingleDevice) SendPresetRecallByPresetIndex(index int) {
 	buf := new(bytes.Buffer)
 	bh := protocol.NewBasicHeader(
 		protocol.MessageTypePresetRecall,
-		protocol.StatusRequestServer,
+		protocol.StatusCommandClient,
 		[4]byte{0, 0, 0, 0},
 		c.seqCmd,
 		byte(c.ComponentId),
