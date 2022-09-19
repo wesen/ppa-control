@@ -29,33 +29,38 @@ type Request struct {
 	AddrPort netip.AddrPort
 }
 
+type SimulatedDeviceSettings struct {
+	UniqueId    [4]byte
+	ComponentId byte
+	Name        string
+	Address     string
+	Port        uint16
+	// if not empty, bind to the given interface
+	Interface string
+}
+
 type SimulatedDevice struct {
 	SendChannel           chan Response
 	ReceiveChannel        chan *bytes.Buffer
-	deviceUniqueId        [4]byte
-	componentId           byte
-	address               string
-	name                  string
+	Settings              SimulatedDeviceSettings
 	presets               []Preset
 	currentlyActivePreset int
 	currentVolume         float32
 }
 
-func NewClient(address string, name string, deviceUniqueId [4]byte, componentId byte) *SimulatedDevice {
+func NewClient(settings SimulatedDeviceSettings) *SimulatedDevice {
 	return &SimulatedDevice{
 		SendChannel:           make(chan Response),
 		ReceiveChannel:        make(chan *bytes.Buffer),
-		deviceUniqueId:        deviceUniqueId,
-		componentId:           componentId,
-		address:               address,
-		name:                  name,
+		Settings:              settings,
 		currentlyActivePreset: 0,
 		currentVolume:         0.0,
 	}
 }
 
 func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
-	addr, err := net.ResolveUDPAddr("udp", c.address)
+	serverString := fmt.Sprintf("%s:%d", c.Settings.Address, c.Settings.Port)
+	addr, err := net.ResolveUDPAddr("udp", serverString)
 	if err != nil {
 		return err
 	}
@@ -66,26 +71,13 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 	}
 	defer conn.Close()
 
-	// TODO add proper passing of interface name by using a settings builder pattern
-	//ifname := ""
-
-	//if ifname != "" {
-	//	c, err := conn.SyscallConn()
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//	err = c.Control(func(fd uintptr) {
-	//		fmt.Printf("Binding socket %d to interface %s\n", fd, ifname)
-	//		// TODO doesn't work on OSX, where it's called IP_BOUND_IF - https://stackoverflow.com/questions/20616029/os-x-equivalent-of-so-bindtodevice
-	//		err = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, ifname)
-	//		if err != nil {
-	//			panic(err)
-	//		}
-	//	})
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//}
+	err = c.bindToInterface(conn)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("interface", c.Settings.Interface).
+			Msg("Could not bind to interface")
+	}
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
@@ -99,6 +91,8 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 			log.Debug().
 				Str("address", conn.LocalAddr().String()).
 				Msg("Waiting for data")
+
+			// TODO add timeout for simulated device
 
 			//deadline := time.Now().Add(Timeout)
 			//err = conn.SetReadDeadline(deadline)
@@ -228,9 +222,9 @@ func (c *SimulatedDevice) handlePing(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		c.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		c.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
@@ -257,9 +251,9 @@ func (c *SimulatedDevice) handleLiveCmd(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		c.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		c.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
@@ -286,9 +280,9 @@ func (c *SimulatedDevice) handleDeviceData(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		c.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		c.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
@@ -316,9 +310,9 @@ func (c *SimulatedDevice) handlePresetRecall(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		c.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		c.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
@@ -345,9 +339,9 @@ func (c *SimulatedDevice) handlePresetSave(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		c.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		c.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
