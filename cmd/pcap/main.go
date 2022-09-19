@@ -182,6 +182,22 @@ func handlePacket(packet gopacket.Packet, packetsToPrint map[protocol.MessageTyp
 				fmt.Printf("Status: %s\n", hdr.Status)
 			}
 		case protocol.MessageTypePresetRecall:
+			switch hdr.Status {
+			case protocol.StatusRequestServer:
+				fallthrough
+			case protocol.StatusResponseClient:
+				fallthrough
+			case protocol.StatusCommandClient:
+				presetRecall, err := protocol.ParsePresetRecall(payload[12:])
+				if err != nil {
+					fmt.Printf("Error: %s\n", err)
+					return
+				}
+
+				fmt.Printf("PresetRecall.CrtFlags: %x\n", presetRecall.CrtFlags)
+				fmt.Printf("PresetRecall.OptFlags: %x\n", presetRecall.OptFlags)
+				fmt.Printf("PresetRecall.PresetId: %x\n", presetRecall.IndexPosition)
+			}
 		}
 	}
 }

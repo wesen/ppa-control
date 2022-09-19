@@ -26,13 +26,13 @@ func (mc *MultiClient) SendPresetRecallByPresetIndex(index int) {
 	}
 }
 
-func (c *MultiClient) Run(ctx context.Context) (err error) {
+func (mc *MultiClient) Run(ctx context.Context, receivedCh *chan ReceivedMessage) (err error) {
 	grp, ctx := errgroup.WithContext(ctx)
 
-	for _, c2 := range c.clients {
+	for _, c2 := range mc.clients {
 		c3 := c2
 		grp.Go(func() error {
-			return c3.Run(ctx)
+			return c3.Run(ctx, receivedCh)
 		})
 	}
 	return grp.Wait()

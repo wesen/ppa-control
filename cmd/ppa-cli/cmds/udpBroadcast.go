@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"net"
-	"syscall"
 )
 
 var udpBroadcastCommand = &cobra.Command{
@@ -35,7 +34,8 @@ var udpBroadcastCommand = &cobra.Command{
 				}
 				err = c.Control(func(fd uintptr) {
 					fmt.Printf("Binding socket %d to interface %s\n", fd, ifname)
-					err = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, ifname)
+					// TODO - different on OSX: IP_BOUND_IF - https://stackoverflow.com/questions/20616029/os-x-equivalent-of-so-bindtodevice
+					//err = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, ifname)
 					if err != nil {
 						panic(err)
 					}
@@ -77,6 +77,6 @@ func init() {
 	rootCmd.AddCommand(udpBroadcastCommand)
 	udpBroadcastCommand.PersistentFlags().StringP("address", "a", "localhost", "AddrPort to listen on")
 	udpBroadcastCommand.PersistentFlags().BoolP("server", "s", false, "Run as server")
-	udpBroadcastCommand.PersistentFlags().UintP("port", "p", 5005, "Port to listen on")
+	udpBroadcastCommand.PersistentFlags().UintP("port", "p", 5001, "Port to listen on")
 	udpBroadcastCommand.PersistentFlags().StringP("interface", "i", "", "Interface to bind to")
 }

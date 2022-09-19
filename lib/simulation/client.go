@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/netip"
 	"ppa-control/lib/protocol"
-	"syscall"
 	"time"
 )
 
@@ -67,40 +66,26 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 	}
 	defer conn.Close()
 
-	rawConn, err := conn.SyscallConn()
-	if err != nil {
-		return err
-	}
-	err = rawConn.Control(func(fd uintptr) {
-		err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
-		if err != nil {
-			log.Error().Err(err).
-				Msg("Could not set socket option broadcast")
-		}
-	})
-	if err != nil {
-		return err
-	}
-
 	// TODO add proper passing of interface name by using a settings builder pattern
-	ifname := ""
+	//ifname := ""
 
-	if ifname != "" {
-		c, err := conn.SyscallConn()
-		if err != nil {
-			panic(err)
-		}
-		err = c.Control(func(fd uintptr) {
-			fmt.Printf("Binding socket %d to interface %s\n", fd, ifname)
-			err = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, ifname)
-			if err != nil {
-				panic(err)
-			}
-		})
-		if err != nil {
-			panic(err)
-		}
-	}
+	//if ifname != "" {
+	//	c, err := conn.SyscallConn()
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	err = c.Control(func(fd uintptr) {
+	//		fmt.Printf("Binding socket %d to interface %s\n", fd, ifname)
+	//		// TODO doesn't work on OSX, where it's called IP_BOUND_IF - https://stackoverflow.com/questions/20616029/os-x-equivalent-of-so-bindtodevice
+	//		err = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, ifname)
+	//		if err != nil {
+	//			panic(err)
+	//		}
+	//	})
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//}
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
@@ -348,7 +333,6 @@ func (c *SimulatedDevice) handlePresetRecall(req *Request) error {
 	}
 
 	return nil
-
 }
 
 func (c *SimulatedDevice) handlePresetSave(req *Request) error {

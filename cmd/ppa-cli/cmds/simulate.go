@@ -35,5 +35,5 @@ var simulateCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(simulateCmd)
 	simulateCmd.PersistentFlags().StringP("address", "a", "localhost", "AddrPort to listen on")
-	simulateCmd.PersistentFlags().UintP("port", "p", 5005, "Port to listen on")
+	simulateCmd.PersistentFlags().UintP("port", "p", 5001, "Port to listen on")
 }

@@ -14,7 +14,6 @@ var pingCmd = &cobra.Command{
 	Use:   "ping",
 	Short: "SendPing one or multiple PPA servers",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		addresses, _ := cmd.PersistentFlags().GetString("addresses")
 		discovery, _ := cmd.PersistentFlags().GetBool("discover")
 		componentId, _ := cmd.PersistentFlags().GetUint("componentId")
@@ -36,7 +35,8 @@ var pingCmd = &cobra.Command{
 		}
 
 		grp.Go(func() error {
-			return multiClient.Run(ctx)
+			// TODO print out received messages
+			return multiClient.Run(ctx, nil)
 		})
 
 		err := grp.Wait()
@@ -61,5 +61,5 @@ func init() {
 		"componentId", "c", 0xFF,
 		"Component ID to use for devices")
 
-	pingCmd.PersistentFlags().UintP("port", "p", 5005, "Port to ping on")
+	pingCmd.PersistentFlags().UintP("port", "p", 5001, "Port to ping on")
 }

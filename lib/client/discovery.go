@@ -12,12 +12,16 @@ func (mc *MultiClient) Discover(ctx context.Context, port uint16) error {
 	broadcastAddr := fmt.Sprintf("255.255.255.255:%d", port)
 	c := NewClient(broadcastAddr, 0xfe)
 
+	receivedCh := make(chan ReceivedMessage)
+
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
-		return c.Run(ctx)
+		return c.Run(ctx, &receivedCh)
 	})
 	grp.Go(func() error {
 		log.Debug().Msg("Starting discovery loop")
+		c.SendPing()
+
 		for {
 			t := time.NewTimer(5 * time.Second)
 
@@ -25,8 +29,18 @@ func (mc *MultiClient) Discover(ctx context.Context, port uint16) error {
 			case <-t.C:
 				c.SendPing()
 
-			case msg := <-c.ReceivedMessagesCh:
-				log.Debug().Str("from", msg.Address.String()).Msg("received message")
+			case msg := <-receivedCh:
+				if msg.Header != nil {
+					log.Info().Str("from", msg.RemoteAddress.String()).
+						Str("client", msg.Client.Name()).
+						Str("type", msg.Header.MessageType.String()).
+						Str("status", msg.Header.Status.String()).
+						Msg("received message")
+				} else {
+					log.Debug().Str("from", msg.RemoteAddress.String()).
+						Str("client", msg.Client.Name()).
+						Msg("received unknown message")
+				}
 
 			case <-ctx.Done():
 				return ctx.Err()

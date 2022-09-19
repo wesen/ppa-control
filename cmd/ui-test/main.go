@@ -20,7 +20,7 @@ import (
 
 var (
 	address     = flag.String("address", "127.0.0.1", "board address")
-	port        = flag.Uint("port", 5005, "default port")
+	port        = flag.Uint("port", 5001, "default port")
 	addresses   = flag.String("addresses", "", "multiple board addresses")
 	componentId = flag.Int("component-id", 0xff, "default component ID (default: 0xff)")
 )
@@ -136,11 +136,34 @@ func main() {
 	})
 
 	grp, ctx2 := errgroup.WithContext(ctx)
+	receivedCh := make(chan client.ReceivedMessage)
 	grp.Go(func() error {
-		return c.Run(ctx2)
+		// TODO handle incoming messages
+		return c.Run(ctx2, &receivedCh)
 	})
 	grp.Go(func() error {
-		return c.RunPingLoop(ctx2)
+		for {
+			select {
+			case <-ctx2.Done():
+				return ctx2.Err()
+			case msg := <-receivedCh:
+				if msg.Header != nil {
+					log.Info().Str("from", msg.RemoteAddress.String()).
+						Str("type", msg.Header.MessageType.String()).
+						Str("client", msg.Client.Name()).
+						Str("status", msg.Header.Status.String()).
+						Msg("received message")
+				} else {
+					log.Debug().
+						Str("from", msg.RemoteAddress.String()).
+						Str("client", msg.Client.Name()).
+						Msg("received unknown message")
+				}
+			}
+		}
+	})
+	grp.Go(func() error {
+		return c.Discover(ctx2, uint16(*port))
 	})
 	go func() {
 		log.Debug().Msg("Waiting for main loop")
