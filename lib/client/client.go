@@ -26,9 +26,11 @@ type Client interface {
 }
 
 type ReceivedMessage struct {
-	Header  *protocol.BasicHeader
-	Address net.Addr
-	Body    interface{}
+	Header        *protocol.BasicHeader
+	RemoteAddress net.Addr
+	Body          interface{}
+	Data          []byte
+	Client        Client
 }
 
 type SingleDevice struct {
@@ -182,8 +184,8 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 		}
 
 		buffer := make([]byte, MaxBufferSize)
-		// Block on read
-		log.Debug().
+
+		log.Trace().
 			Str("address", conn.LocalAddr().String()).
 			Msg("Reading from connection")
 
@@ -202,7 +204,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 			switch v := err.(type) {
 			case *net.OpError:
 				if v.Timeout() {
-					log.Debug().Msg("Read timeout")
+					log.Trace().Msg("Read timeout")
 					continue
 				}
 				switch v2 := v.Err.(type) {
@@ -236,19 +238,25 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 
 			if receivedCh != nil {
 				*receivedCh <- ReceivedMessage{
-					Header:  nil,
-					Address: addr,
-					Body:    buffer[:nRead],
+					Header:        nil,
+					RemoteAddress: addr,
+					Client:        c,
+					Body:          nil,
+					Data:          buffer[:nRead],
 				}
 			}
 			continue
 		}
 
+		// XXX parse body further
+
 		if receivedCh != nil {
 			*receivedCh <- ReceivedMessage{
-				Header:  hdr,
-				Address: addr,
-				Body:    buffer[:nRead],
+				Header:        hdr,
+				RemoteAddress: addr,
+				Client:        c,
+				Body:          nil,
+				Data:          buffer[:nRead],
 			}
 		}
 	}

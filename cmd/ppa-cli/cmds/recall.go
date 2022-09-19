@@ -45,6 +45,29 @@ var recallCmd = &cobra.Command{
 		})
 
 		grp.Go(func() error {
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case msg := <-receivedCh:
+					if msg.Header != nil {
+						log.Info().Str("from", msg.RemoteAddress.String()).
+							Str("type", msg.Header.MessageType.String()).
+							Str("client", msg.Client.Name()).
+							Str("status", msg.Header.Status.String()).
+							Msg("received message")
+					} else {
+						log.Debug().
+							Str("from", msg.RemoteAddress.String()).
+							Str("client", msg.Client.Name()).
+							Msg("received unknown message")
+					}
+
+				}
+			}
+		})
+
+		grp.Go(func() error {
 			multiClient.SendPresetRecallByPresetIndex(preset)
 			if loop {
 				for {
@@ -53,15 +76,6 @@ var recallCmd = &cobra.Command{
 					select {
 					case <-t.C:
 						multiClient.SendPresetRecallByPresetIndex(preset)
-					case msg := <-receivedCh:
-						if msg.Header != nil {
-							log.Info().Str("from", msg.Address.String()).
-								Str("type", msg.Header.MessageType.String()).
-								Str("status", msg.Header.Status.String()).
-								Msg("received message")
-						} else {
-							log.Debug().Str("from", msg.Address.String()).Msg("received unknown message")
-						}
 					}
 				}
 			}

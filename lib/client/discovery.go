@@ -31,12 +31,15 @@ func (mc *MultiClient) Discover(ctx context.Context, port uint16) error {
 
 			case msg := <-receivedCh:
 				if msg.Header != nil {
-					log.Info().Str("from", msg.Address.String()).
+					log.Info().Str("from", msg.RemoteAddress.String()).
+						Str("client", msg.Client.Name()).
 						Str("type", msg.Header.MessageType.String()).
 						Str("status", msg.Header.Status.String()).
 						Msg("received message")
 				} else {
-					log.Debug().Str("from", msg.Address.String()).Msg("received unknown message")
+					log.Debug().Str("from", msg.RemoteAddress.String()).
+						Str("client", msg.Client.Name()).
+						Msg("received unknown message")
 				}
 
 			case <-ctx.Done():

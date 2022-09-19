@@ -333,7 +333,6 @@ func (c *SimulatedDevice) handlePresetRecall(req *Request) error {
 	}
 
 	return nil
-
 }
 
 func (c *SimulatedDevice) handlePresetSave(req *Request) error {
