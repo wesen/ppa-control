@@ -14,6 +14,7 @@ var pingCmd = &cobra.Command{
 	Use:   "ping",
 	Short: "SendPing one or multiple PPA servers",
 	Run: func(cmd *cobra.Command, args []string) {
+		// TODO ping commands doesn't send to addresses, only discovery
 		addresses, _ := cmd.PersistentFlags().GetString("addresses")
 		discovery, _ := cmd.PersistentFlags().GetBool("discover")
 		componentId, _ := cmd.PersistentFlags().GetUint("componentId")
