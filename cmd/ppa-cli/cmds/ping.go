@@ -8,13 +8,13 @@ import (
 	"golang.org/x/sync/errgroup"
 	"ppa-control/lib/client"
 	"strings"
+	"time"
 )
 
 var pingCmd = &cobra.Command{
 	Use:   "ping",
 	Short: "SendPing one or multiple PPA servers",
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO ping commands doesn't send to addresses, only discovery
 		addresses, _ := cmd.PersistentFlags().GetString("addresses")
 		discovery, _ := cmd.PersistentFlags().GetBool("discover")
 		componentId, _ := cmd.PersistentFlags().GetUint("componentId")
@@ -35,9 +35,41 @@ var pingCmd = &cobra.Command{
 			})
 		}
 
+		receivedCh := make(chan client.ReceivedMessage)
+
 		grp.Go(func() error {
-			// TODO print out received messages
-			return multiClient.Run(ctx, nil)
+			// runs both the send and read loops
+			return multiClient.Run(ctx, &receivedCh)
+		})
+
+		grp.Go(func() error {
+			multiClient.SendPing()
+
+			for {
+				t := time.NewTimer(5 * time.Second)
+
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+
+				case <-t.C:
+					multiClient.SendPing()
+
+				case msg := <-receivedCh:
+					if msg.Header != nil {
+						log.Info().Str("from", msg.RemoteAddress.String()).
+							Str("client", msg.Client.Name()).
+							Str("type", msg.Header.MessageType.String()).
+							Str("status", msg.Header.Status.String()).
+							Msg("received message")
+					} else {
+						log.Debug().Str("from", msg.RemoteAddress.String()).
+							Str("client", msg.Client.Name()).
+							Msg("received unknown message")
+					}
+				}
+			}
+
 		})
 
 		err := grp.Wait()
@@ -54,8 +86,9 @@ func init() {
 		"addresses", "a", "",
 		"Addresses to ping, comma separated",
 	)
+	// disable discovery by default when pinging
 	pingCmd.PersistentFlags().BoolP(
-		"discover", "d", true,
+		"discover", "d", false,
 		"Send broadcast discovery messages",
 	)
 	pingCmd.PersistentFlags().UintP(
