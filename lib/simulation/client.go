@@ -8,7 +8,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"net"
-	"net/netip"
 	"ppa-control/lib/protocol"
 	"time"
 )
@@ -20,72 +19,55 @@ type Preset struct {
 }
 
 type Response struct {
-	Buffer   *bytes.Buffer
-	AddrPort netip.AddrPort
+	Buffer *bytes.Buffer
+	Addr   net.Addr
 }
 
 type Request struct {
-	Buffer   *bytes.Buffer
-	AddrPort netip.AddrPort
+	Buffer *bytes.Buffer
+	Addr   net.Addr
+}
+
+type SimulatedDeviceSettings struct {
+	UniqueId    [4]byte
+	ComponentId byte
+	Name        string
+	Address     string
+	Port        uint16
+	// if not empty, bind to the given interface
+	Interface string
 }
 
 type SimulatedDevice struct {
 	SendChannel           chan Response
 	ReceiveChannel        chan *bytes.Buffer
-	deviceUniqueId        [4]byte
-	componentId           byte
-	address               string
-	name                  string
+	Settings              SimulatedDeviceSettings
 	presets               []Preset
 	currentlyActivePreset int
 	currentVolume         float32
 }
 
-func NewClient(address string, name string, deviceUniqueId [4]byte, componentId byte) *SimulatedDevice {
+func NewClient(settings SimulatedDeviceSettings) *SimulatedDevice {
 	return &SimulatedDevice{
 		SendChannel:           make(chan Response),
 		ReceiveChannel:        make(chan *bytes.Buffer),
-		deviceUniqueId:        deviceUniqueId,
-		componentId:           componentId,
-		address:               address,
-		name:                  name,
+		Settings:              settings,
 		currentlyActivePreset: 0,
 		currentVolume:         0.0,
 	}
 }
 
-func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
-	addr, err := net.ResolveUDPAddr("udp", c.address)
+func (sd *SimulatedDevice) Run(ctx context.Context) (err error) {
+	serverString := fmt.Sprintf("%s:%d", sd.Settings.Address, sd.Settings.Port)
+	conn, err := ListenUDPBroadcast(ctx, serverString, sd.Settings.Interface)
+
 	if err != nil {
+		log.Error().
+			Err(err).
+			Str("interface", sd.Settings.Interface).
+			Msg("Could not bind to interface")
 		return err
 	}
-
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// TODO add proper passing of interface name by using a settings builder pattern
-	//ifname := ""
-
-	//if ifname != "" {
-	//	c, err := conn.SyscallConn()
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//	err = c.Control(func(fd uintptr) {
-	//		fmt.Printf("Binding socket %d to interface %s\n", fd, ifname)
-	//		// TODO doesn't work on OSX, where it's called IP_BOUND_IF - https://stackoverflow.com/questions/20616029/os-x-equivalent-of-so-bindtodevice
-	//		err = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, ifname)
-	//		if err != nil {
-	//			panic(err)
-	//		}
-	//	})
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//}
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
@@ -100,6 +82,8 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 				Str("address", conn.LocalAddr().String()).
 				Msg("Waiting for data")
 
+			// TODO add timeout for simulated device
+
 			//deadline := time.Now().Add(Timeout)
 			//err = conn.SetReadDeadline(deadline)
 			//if err != nil {
@@ -108,7 +92,7 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 			//		Msg("Could not set read deadline")
 			//}
 
-			n, srcAddr, err := conn.ReadFromUDP(buffer)
+			n, srcAddr, err := conn.ReadFrom(buffer)
 			if err != nil {
 				log.Error().Str("error", err.Error()).Msg("Could not read from UDP")
 				return err
@@ -121,8 +105,8 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 			fmt.Printf("%s\n", hexdump.Dump(buffer[:n]))
 
 			request := &Request{
-				Buffer:   bytes.NewBuffer(buffer[:n]),
-				AddrPort: srcAddr.AddrPort(),
+				Buffer: bytes.NewBuffer(buffer[:n]),
+				Addr:   srcAddr,
 			}
 
 			if n > 0 {
@@ -130,35 +114,35 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 				switch protocol.MessageType(buffer[0]) {
 				case protocol.MessageTypePing:
 					{
-						err := c.handlePing(request)
+						err := sd.handlePing(request)
 						if err != nil {
 							log.Warn().Str("error", err.Error()).Msg("Could not handle ping")
 						}
 					}
 				case protocol.MessageTypeLiveCmd:
 					{
-						err := c.handleLiveCmd(request)
+						err := sd.handleLiveCmd(request)
 						if err != nil {
 							log.Warn().Str("error", err.Error()).Msg("Could not handle live command")
 						}
 					}
 				case protocol.MessageTypeDeviceData:
 					{
-						err := c.handleDeviceData(request)
+						err := sd.handleDeviceData(request)
 						if err != nil {
 							log.Warn().Str("error", err.Error()).Msg("Could not handle device data")
 						}
 					}
 				case protocol.MessageTypePresetRecall:
 					{
-						err := c.handlePresetRecall(request)
+						err := sd.handlePresetRecall(request)
 						if err != nil {
 							log.Warn().Str("error", err.Error()).Msg("Could not handle preset recall")
 						}
 					}
 				case protocol.MessageTypePresetSave:
 					{
-						err := c.handlePresetSave(request)
+						err := sd.handlePresetSave(request)
 						if err != nil {
 							log.Warn().Str("error", err.Error()).Msg("Could not handle preset save")
 						}
@@ -179,7 +163,7 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 				log.Info().Msg("write-loop exiting")
 				return ctx.Err()
 
-			case response := <-c.SendChannel:
+			case response := <-sd.SendChannel:
 				// Send
 				log.Debug().
 					Int("len", response.Buffer.Len()).
@@ -191,18 +175,18 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 				if err != nil {
 					return err
 				}
-				n, err := conn.WriteToUDPAddrPort(response.Buffer.Bytes(), response.AddrPort)
+				n, err := conn.WriteTo(response.Buffer.Bytes(), response.Addr)
 				if err != nil {
 					log.Warn().
 						Err(err).
-						Str("to", response.AddrPort.String()).
+						Str("to", response.Addr.String()).
 						Str("local", conn.LocalAddr().String()).
 						Int("length", response.Buffer.Len()).
 						Bytes("data", response.Buffer.Bytes()).
 						Msg("Could not write to UDP")
 				} else {
 					log.Info().
-						Str("to", response.AddrPort.String()).
+						Str("to", response.Addr.String()).
 						Str("local", conn.LocalAddr().String()).
 						Int("length", response.Buffer.Len()).
 						Bytes("data", response.Buffer.Bytes()).
@@ -218,7 +202,7 @@ func (c *SimulatedDevice) Run(ctx context.Context) (err error) {
 	return err
 }
 
-func (c *SimulatedDevice) handlePing(req *Request) error {
+func (sd *SimulatedDevice) handlePing(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
@@ -228,9 +212,9 @@ func (c *SimulatedDevice) handlePing(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		sd.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		sd.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
@@ -239,15 +223,15 @@ func (c *SimulatedDevice) handlePing(req *Request) error {
 		return err
 	}
 
-	c.SendChannel <- Response{
-		Buffer:   buf,
-		AddrPort: req.AddrPort,
+	sd.SendChannel <- Response{
+		Buffer: buf,
+		Addr:   req.Addr,
 	}
 
 	return nil
 }
 
-func (c *SimulatedDevice) handleLiveCmd(req *Request) error {
+func (sd *SimulatedDevice) handleLiveCmd(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
@@ -257,9 +241,9 @@ func (c *SimulatedDevice) handleLiveCmd(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		sd.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		sd.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
@@ -268,15 +252,15 @@ func (c *SimulatedDevice) handleLiveCmd(req *Request) error {
 		return err
 	}
 
-	c.SendChannel <- Response{
-		Buffer:   buf,
-		AddrPort: req.AddrPort,
+	sd.SendChannel <- Response{
+		Buffer: buf,
+		Addr:   req.Addr,
 	}
 
 	return nil
 }
 
-func (c *SimulatedDevice) handleDeviceData(req *Request) error {
+func (sd *SimulatedDevice) handleDeviceData(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
@@ -286,9 +270,9 @@ func (c *SimulatedDevice) handleDeviceData(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		sd.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		sd.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
@@ -297,16 +281,16 @@ func (c *SimulatedDevice) handleDeviceData(req *Request) error {
 		return err
 	}
 
-	c.SendChannel <- Response{
-		Buffer:   buf,
-		AddrPort: req.AddrPort,
+	sd.SendChannel <- Response{
+		Buffer: buf,
+		Addr:   req.Addr,
 	}
 
 	return nil
 
 }
 
-func (c *SimulatedDevice) handlePresetRecall(req *Request) error {
+func (sd *SimulatedDevice) handlePresetRecall(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
@@ -316,9 +300,9 @@ func (c *SimulatedDevice) handlePresetRecall(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		sd.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		sd.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
@@ -327,15 +311,15 @@ func (c *SimulatedDevice) handlePresetRecall(req *Request) error {
 		return err
 	}
 
-	c.SendChannel <- Response{
-		Buffer:   buf,
-		AddrPort: req.AddrPort,
+	sd.SendChannel <- Response{
+		Buffer: buf,
+		Addr:   req.Addr,
 	}
 
 	return nil
 }
 
-func (c *SimulatedDevice) handlePresetSave(req *Request) error {
+func (sd *SimulatedDevice) handlePresetSave(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
 		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
@@ -345,9 +329,9 @@ func (c *SimulatedDevice) handlePresetSave(req *Request) error {
 	response := protocol.NewBasicHeader(
 		protocol.MessageTypePing,
 		protocol.StatusResponseServer,
-		c.deviceUniqueId,
+		sd.Settings.UniqueId,
 		hdr.SequenceNumber,
-		c.componentId)
+		sd.Settings.ComponentId)
 
 	buf := new(bytes.Buffer)
 	err = protocol.EncodeHeader(buf, response)
@@ -356,9 +340,9 @@ func (c *SimulatedDevice) handlePresetSave(req *Request) error {
 		return err
 	}
 
-	c.SendChannel <- Response{
-		Buffer:   buf,
-		AddrPort: req.AddrPort,
+	sd.SendChannel <- Response{
+		Buffer: buf,
+		Addr:   req.Addr,
 	}
 
 	return nil

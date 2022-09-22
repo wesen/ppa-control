@@ -6,6 +6,7 @@ require (
 	fyne.io/fyne/v2 v2.2.3
 	github.com/augustoroman/hexdump v0.0.0-20190827031536-6506f4163e93
 	github.com/google/gopacket v1.1.19
+	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.28.0
 	github.com/spf13/cobra v1.5.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
