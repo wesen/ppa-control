@@ -31,7 +31,9 @@ var pingCmd = &cobra.Command{
 
 		var clients []client.Client
 		for _, addr := range strings.Split(addresses, ",") {
-			clients = append(clients, client.NewClient(fmt.Sprintf("%s:%d", addr, port), int(componentId)))
+			if addr != "" {
+				clients = append(clients, client.NewClient(fmt.Sprintf("%s:%d", addr, port), int(componentId)))
+			}
 		}
 		multiClient := client.NewMultiClient(clients)
 		ctx := context.Background()
