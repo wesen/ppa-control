@@ -29,7 +29,7 @@ var simulateCmd = &cobra.Command{
 			Port:        uint16(port),
 			Interface:   interface_,
 		}
-		client := simulation.NewClient(settings)
+		client := simulation.NewSimulatedDevice(settings)
 		grp.Go(func() error {
 			return client.Run(ctx)
 		})
