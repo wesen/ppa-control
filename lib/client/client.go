@@ -25,6 +25,15 @@ type Client interface {
 	Name() string
 }
 
+// A client has multiple target addresses, and no source address (?).
+//That actually won't work either, will it...
+
+// A client should have a list of targeted *UDPAddr, to avoid having to pass strings with ports around (?)
+// I actually think the current structure is not too bad for the clients...
+// We just need to have the multiclient be able to add and remove clients (?)
+//
+// What about the discovery loop? We also need to recognize new interfaces...
+
 type ReceivedMessage struct {
 	Header        *protocol.BasicHeader
 	RemoteAddress net.Addr
@@ -80,7 +89,7 @@ func (c *SingleDevice) SendPresetRecallByPresetIndex(index int) {
 		byte(c.ComponentId),
 	)
 	pr := protocol.NewPresetRecall(protocol.RecallByPresetIndex, 0, byte(index))
-	// XXX potentially need mutex here
+	// TODO potentially need mutex here
 	c.seqCmd += 1
 
 	err := protocol.EncodeHeader(buf, bh)
@@ -106,6 +115,10 @@ func (c *SingleDevice) Run(ctx context.Context, receivedCh *chan ReceivedMessage
 		return
 	}
 
+	// TODO: if we want to bind this connection to an interface, we need to figure out how to control a UDPConn
+	// there is a private method newUDPConn that we could use, but it's not exported.
+	//
+	// But we can get a PacketConn, which is maybe good too?
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return
@@ -248,7 +261,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 			continue
 		}
 
-		// XXX parse body further
+		// TODO parse body further
 
 		if receivedCh != nil {
 			*receivedCh <- ReceivedMessage{

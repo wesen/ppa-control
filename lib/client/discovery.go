@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
+	"net"
+	"sync"
 	"time"
 )
 
@@ -42,17 +44,113 @@ func Discover(ctx context.Context, msgCh chan PeerInformation, port uint16) erro
 	//
 	// TODO(manuel) We should bind each client to an interface in order to send out multiple broadcast
 	// packets
-	c := NewClient(broadcastAddr, 0xfe)
 
 	receivedCh := make(chan ReceivedMessage)
 
+	// make a waitGroup for all the client goroutines
+	clientWg := &sync.WaitGroup{}
+
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
-		return c.Run(ctx, &receivedCh)
-	})
-	grp.Go(func() error {
 		log.Debug().Msg("Starting discovery loop")
-		c.SendPing()
+
+		clients := make(map[string]Client)
+		clientCancels := make(map[string]context.CancelFunc)
+		clientMutex := &sync.Mutex{}
+		// maybe we need a running list of currently active clients (?)
+		// or maybe the wait group is enough...
+
+		ifaces, err := net.Interfaces()
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get interfaces")
+			return err
+		}
+
+		// create an initial set of clients,
+		// but we should make this a method that recognizes added and removed interfaces.
+		for _, iface := range ifaces {
+			if iface.Flags&net.FlagUp == 0 {
+				// interface down
+				continue
+			}
+			if iface.Flags&net.FlagLoopback != 0 {
+				// loopback interface
+				continue
+			}
+
+			addrs, err := iface.Addrs()
+			if err != nil {
+				log.Error().Err(err).Msg("failed to get interface addresses")
+				return err
+			}
+			// go over IP address range
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				if ip == nil || ip.IsLoopback() {
+					continue
+				}
+
+				// we don't do IPv6
+				if ip.To4() == nil {
+					continue
+				}
+
+				log.Info().
+					Str("interface", iface.Name).
+					Str("ip", ip.String()).
+					Str("netmask", ip.DefaultMask().String()).
+					Msg("found ip address")
+
+				// now, create a client bound to the interface with the address being 255.255.255.255
+				c := NewClient(broadcastAddr, 0xfe)
+
+				clientCtx, cancel := context.WithCancel(ctx)
+				func() {
+					clientMutex.Lock()
+					defer clientMutex.Unlock()
+
+					clients[iface.Name] = c
+					clientCancels[iface.Name] = cancel
+				}()
+
+				go func() {
+					clientWg.Add(1)
+					// we need to run that loop to read from the socket, because reading is blocking.
+					// the send loop of the client is not that necessary.
+					// however, we need to be able to dynamically add and remove clients, because the interfaces
+					// might change.
+					log.Info().Str("iface", iface.Name).Msg("starting client")
+					// the context here should be specific to each client
+					err := c.Run(clientCtx, &receivedCh)
+
+					// remove the client from the hashtables
+					func() {
+						clientMutex.Lock()
+						defer clientMutex.Unlock()
+
+						delete(clients, iface.Name)
+						delete(clientCancels, iface.Name)
+					}()
+
+					clientWg.Done()
+					if err != nil {
+						log.Error().Err(err).Msg("error while running client")
+					}
+
+					log.Info().Str("iface", iface.Name).Err(err).Msg("client stopped")
+				}()
+			}
+		}
+
+		for _, c := range clients {
+			c.SendPing()
+		}
 
 		peerLastSeen := make(map[string]time.Time)
 		peerTimeout := 30 * time.Second
@@ -69,7 +167,10 @@ func Discover(ctx context.Context, msgCh chan PeerInformation, port uint16) erro
 						delete(peerLastSeen, addr)
 					}
 				}
-				c.SendPing()
+				// here, we need to iterate over all the interfaces, create a new client if necessasry, and send a ping from it
+				for _, c := range clients {
+					c.SendPing()
+				}
 
 			case msg := <-receivedCh:
 				if msg.Header != nil {
@@ -93,6 +194,12 @@ func Discover(ctx context.Context, msgCh chan PeerInformation, port uint16) erro
 				}
 
 			case <-ctx.Done():
+				log.Info().Msg("waiting for clients to stop")
+				for _, cancel := range clientCancels {
+					cancel()
+				}
+				clientWg.Wait()
+
 				return ctx.Err()
 			}
 		}
