@@ -5,6 +5,15 @@ for DSP boards by PPA.
 
 It allows handles discovery by sending out UDP broadcast packets.
 
+## Building on Linux
+
+You need the following packages for building on Linux:
+
+```shell
+apt-get install libpcap-dev
+apt-get install libgl1-mesa-dev xorg-dev
+```
+
 ## Command line usage
 
 ### Starting a simulated speaker
