@@ -11,6 +11,14 @@ import (
 	"time"
 )
 
+// You can create virtual ethernet interfaces on linux using the `dummy` driver
+// ip link add eth10 type dummy
+// ip link name eth10 dev dummy0
+// ip addr add 192.168.100.199/24 brd + dev eth10 label eth10:0
+// ip link set eth10 up
+//
+// ip link delete eth10 type dummy
+
 var pingCmd = &cobra.Command{
 	Use:   "ping",
 	Short: "SendPing one or multiple PPA servers",
@@ -30,8 +38,25 @@ var pingCmd = &cobra.Command{
 		grp, ctx := errgroup.WithContext(ctx)
 
 		if discovery {
+			discoveryCh := make(chan client.PeerInformation)
 			grp.Go(func() error {
-				return multiClient.Discover(ctx, uint16(port))
+				for {
+					select {
+					case <-ctx.Done():
+						return nil
+					case msg := <-discoveryCh:
+						log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
+						switch msg.(type) {
+						case client.PeerDiscovered:
+							log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
+						case client.PeerLost:
+							log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
+						}
+					}
+				}
+			})
+			grp.Go(func() error {
+				return client.Discover(ctx, discoveryCh, uint16(port))
 			})
 		}
 
