@@ -32,8 +32,28 @@ var recallCmd = &cobra.Command{
 		grp, ctx := errgroup.WithContext(ctx)
 
 		if discovery {
+			// TODO(manuel) this should actually be moved into multiclient, as I used to have it
+			//
+			// in fact, discover
+			discoveryCh := make(chan client.PeerInformation)
 			grp.Go(func() error {
-				return multiClient.Discover(ctx, uint16(port))
+				for {
+					select {
+					case <-ctx.Done():
+						return nil
+					case msg := <-discoveryCh:
+						log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
+						switch msg.(type) {
+						case client.PeerDiscovered:
+							log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
+						case client.PeerLost:
+							log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
+						}
+					}
+				}
+			})
+			grp.Go(func() error {
+				return client.Discover(ctx, discoveryCh, uint16(port))
 			})
 		}
 
