@@ -40,6 +40,8 @@ var pingCmd = &cobra.Command{
 		grp, ctx := errgroup.WithContext(ctx)
 
 		if discovery {
+			interfaces, _ := cmd.PersistentFlags().GetStringArray("interfaces")
+
 			discoveryCh := make(chan client.PeerInformation)
 			grp.Go(func() error {
 				for {
@@ -58,7 +60,7 @@ var pingCmd = &cobra.Command{
 				}
 			})
 			grp.Go(func() error {
-				return client.Discover(ctx, discoveryCh, uint16(port))
+				return client.Discover(ctx, discoveryCh, interfaces, uint16(port))
 			})
 		}
 
@@ -118,6 +120,9 @@ func init() {
 		"discover", "d", false,
 		"Send broadcast discovery messages",
 	)
+
+	pingCmd.PersistentFlags().StringArray("interfaces", []string{}, "Interfaces to use for discovery")
+
 	pingCmd.PersistentFlags().UintP(
 		"componentId", "c", 0xFF,
 		"Component ID to use for devices")

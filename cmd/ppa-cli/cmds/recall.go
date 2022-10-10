@@ -53,7 +53,7 @@ var recallCmd = &cobra.Command{
 				}
 			})
 			grp.Go(func() error {
-				return client.Discover(ctx, discoveryCh, uint16(port))
+				return client.Discover(ctx, discoveryCh, nil, uint16(port))
 			})
 		}
 

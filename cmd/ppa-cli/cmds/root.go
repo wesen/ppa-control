@@ -5,12 +5,17 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"os"
+	logger "ppa-control/lib/log"
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "ppa-cli",
 	Short: "ppa-cli is a command line interface for the PPA protocol",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		withCaller, _ := cmd.Flags().GetBool("with-caller")
+		fmt.Println("withCaller", withCaller)
+		logger.InitializeLogger(withCaller)
+
 		level, _ := cmd.Flags().GetString("log-level")
 		switch level {
 		case "debug":
@@ -36,4 +41,5 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringP("log-level", "l", "debug", "Log level")
+	rootCmd.PersistentFlags().Bool("with-caller", false, "Log caller")
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"net"
+	"ppa-control/lib/utils"
 	"sync"
 	"time"
 )
@@ -30,127 +31,277 @@ func (c PeerLost) GetAddress() string {
 	return c.addr
 }
 
-func Discover(ctx context.Context, msgCh chan PeerInformation, port uint16) error {
-	broadcastAddr := fmt.Sprintf("255.255.255.255:%d", port)
+type interfaceDiscoverer struct {
+	im                 *interfaceManager
+	acceptedInterfaces map[string]bool
+	addedInterfaceCh   chan string
+	removedInterfaceCh chan string
+}
 
-	// From: https://stackoverflow.com/questions/683624/udp-broadcast-on-all-interfaces
-	//
-	// With a single sendto(), only a single packet is generated, and the outgoing interface is
-	// determined by the operating system's routing table (ip route on linux). You can't have
-	// a single sendto() generate more than one packet, you would have to iterate over all
-	// interfaces, and either use raw sockets or bind the socket to a device using
-	// setsockopt(..., SOL_SOCKET, SO_BINDTODEVICE, "ethX") to send each packet bypassing the
-	// OS routing table (this requires root privileges). Not a good solution.
-	//
-	// TODO(manuel) We should bind each client to an interface in order to send out multiple broadcast
-	// packets
+func newInterfaceDiscoverer(im *interfaceManager, acceptedInterfaces []string) *interfaceDiscoverer {
+	acceptedInterfacesMap := make(map[string]bool)
+	for _, iface := range acceptedInterfaces {
+		acceptedInterfacesMap[iface] = true
+	}
+	return &interfaceDiscoverer{
+		im:                 im,
+		acceptedInterfaces: acceptedInterfacesMap,
+		addedInterfaceCh:   make(chan string),
+		removedInterfaceCh: make(chan string),
+	}
+}
 
-	receivedCh := make(chan ReceivedMessage)
+func (id *interfaceDiscoverer) updateInterfaces(currentInterfaces []string) (newInterfaces []string, removedInterfaces []string, err error) {
+	validInterfaces, err := utils.GetValidInterfaces()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get interfaces")
+		return nil, nil, err
+	}
+	log.Debug().Msgf("valid interfaces: %v", validInterfaces)
 
-	// make a waitGroup for all the client goroutines
-	clientWg := &sync.WaitGroup{}
+	newInterfaces = make([]string, 0)
+	removedInterfaces = make([]string, 0)
 
-	grp, ctx := errgroup.WithContext(ctx)
-	grp.Go(func() error {
-		log.Debug().Msg("Starting discovery loop")
+	currentInterfacesMap := make(map[string]bool)
+	for _, iface := range currentInterfaces {
+		currentInterfacesMap[iface] = true
+	}
+	// create a hashmap of validInterfaces
+	validInterfacesMap := make(map[string]net.Interface)
+	for _, iface := range validInterfaces {
+		validInterfacesMap[iface.Name] = iface
+	}
 
-		clients := make(map[string]Client)
-		clientCancels := make(map[string]context.CancelFunc)
-		clientMutex := &sync.Mutex{}
-		// maybe we need a running list of currently active clients (?)
-		// or maybe the wait group is enough...
+	for ifaceName := range currentInterfacesMap {
+		if _, ok := validInterfacesMap[ifaceName]; !ok {
+			removedInterfaces = append(removedInterfaces, ifaceName)
+		}
+	}
 
-		ifaces, err := net.Interfaces()
+	for _, iface := range validInterfaces {
+		if len(id.acceptedInterfaces) > 0 {
+			if _, ok := id.acceptedInterfaces[iface.Name]; !ok {
+				// not an accepted interface
+				continue
+			}
+		}
+		if _, ok := currentInterfacesMap[iface.Name]; ok {
+			// already know interface
+			continue
+		}
+
+		newInterfaces = append(newInterfaces, iface.Name)
+	}
+
+	return
+}
+
+// Run will discover new and removed interfaces.
+// we use the interfaceManager to get the current list of clients
+func (id *interfaceDiscoverer) Run(ctx context.Context) error {
+	scanInterfaces := func() error {
+		log.Debug().Msg("scanning interfaces")
+
+		clientInterfaces := id.im.getClientInterfaces()
+
+		log.Debug().Msgf("current interfaces: %v", clientInterfaces)
+		newInterfaces, removedInterfaces, err := id.updateInterfaces(clientInterfaces)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to get interfaces")
+			log.Error().Err(err).Msg("failed to update interfaces")
 			return err
 		}
 
-		// create an initial set of clients,
-		// but we should make this a method that recognizes added and removed interfaces.
-		for _, iface := range ifaces {
-			if iface.Flags&net.FlagUp == 0 {
-				// interface down
-				continue
+		// use non-blocking primitives to avoid hanging if the main loop gets cancelled
+		for _, iface := range newInterfaces {
+			log.Debug().Str("iface", iface).Msg("adding interface")
+			select {
+			case id.addedInterfaceCh <- iface:
+				log.Debug().Str("iface", iface).Msg("added interface")
+			case <-ctx.Done():
+				return ctx.Err()
 			}
-			if iface.Flags&net.FlagLoopback != 0 {
-				// loopback interface
-				continue
-			}
+		}
 
-			addrs, err := iface.Addrs()
+		for _, iface := range removedInterfaces {
+			log.Debug().Str("iface", iface).Msg("removing interface")
+			select {
+			case id.removedInterfaceCh <- iface:
+				log.Debug().Str("iface", iface).Msg("removed interface")
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		return nil
+	}
+
+	err := scanInterfaces()
+	if err != nil {
+		return err
+	}
+
+	for {
+		t := time.NewTimer(5 * time.Second)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case <-t.C:
+			err := scanInterfaces()
 			if err != nil {
-				log.Error().Err(err).Msg("failed to get interface addresses")
 				return err
 			}
-			// go over IP address range
-			for _, addr := range addrs {
-				var ip net.IP
-				switch v := addr.(type) {
-				case *net.IPNet:
-					ip = v.IP
-				case *net.IPAddr:
-					ip = v.IP
-				}
-				if ip == nil || ip.IsLoopback() {
-					continue
-				}
+		}
+	}
+}
 
-				// we don't do IPv6
-				if ip.To4() == nil {
-					continue
-				}
+type interfaceManager struct {
+	port       uint16
+	receivedCh *chan ReceivedMessage
 
-				log.Info().
-					Str("interface", iface.Name).
-					Str("ip", ip.String()).
-					Str("netmask", ip.DefaultMask().String()).
-					Msg("found ip address")
+	// used to wait for all clients to be done
+	wg sync.WaitGroup
 
-				// now, create a client bound to the interface with the address being 255.255.255.255
-				c := NewClient(broadcastAddr, 0xfe)
+	// one Client and cancel per interface, protected by mutex
+	mutex   sync.RWMutex
+	clients map[string]Client
+	cancels map[string]context.CancelFunc
+}
 
-				clientCtx, cancel := context.WithCancel(ctx)
-				func() {
-					clientMutex.Lock()
-					defer clientMutex.Unlock()
+func newClientMap(port uint16, receivedCh *chan ReceivedMessage) *interfaceManager {
+	return &interfaceManager{
+		clients:    make(map[string]Client),
+		cancels:    make(map[string]context.CancelFunc),
+		receivedCh: receivedCh,
+		port:       port,
+	}
+}
 
-					clients[iface.Name] = c
-					clientCancels[iface.Name] = cancel
-				}()
+func (im *interfaceManager) sendPing() {
+	im.mutex.RLock()
+	defer func() {
+		log.Trace().Msg("unlocking sendPing mutex")
+		im.mutex.RUnlock()
+	}()
 
-				go func() {
-					clientWg.Add(1)
-					// we need to run that loop to read from the socket, because reading is blocking.
-					// the send loop of the client is not that necessary.
-					// however, we need to be able to dynamically add and remove clients, because the interfaces
-					// might change.
-					log.Info().Str("iface", iface.Name).Msg("starting client")
-					// the context here should be specific to each client
-					err := c.Run(clientCtx, &receivedCh)
+	for _, client := range im.clients {
+		client.SendPing()
+	}
+}
 
-					// remove the client from the hashtables
-					func() {
-						clientMutex.Lock()
-						defer clientMutex.Unlock()
+func (im *interfaceManager) doesInterfaceExist(iface string) bool {
+	im.mutex.RLock()
+	defer func() {
+		log.Trace().Msg("unlocking doesInterfaceExist mutex")
+		defer im.mutex.RUnlock()
+	}()
 
-						delete(clients, iface.Name)
-						delete(clientCancels, iface.Name)
-					}()
+	_, ok := im.clients[iface]
+	return ok
+}
 
-					clientWg.Done()
-					if err != nil {
-						log.Error().Err(err).Msg("error while running client")
-					}
+func (im *interfaceManager) addInterface(ctx context.Context, iface string) error {
+	log.Debug().Str("iface", iface).Msg("adding interface")
+	if im.doesInterfaceExist(iface) {
+		log.Error().Str("iface", iface).Msg("interface already exists")
+		return fmt.Errorf("interface %s already exists", iface)
+	}
 
-					log.Info().Str("iface", iface.Name).Err(err).Msg("client stopped")
-				}()
-			}
+	log.Debug().Str("iface", iface).Msg("creating client")
+
+	broadcastAddr := fmt.Sprintf("255.255.255.255:%d", im.port)
+
+	// now, create a client bound to the interface with the address being 255.255.255.255
+	c := NewClient(broadcastAddr, 0xfe)
+
+	clientCtx, cancel := context.WithCancel(ctx)
+	log.Debug().Str("iface", iface).Msg("adding client")
+	func() {
+		im.mutex.Lock()
+		defer func() {
+			log.Trace().Str("iface", iface).Msg("unlocking addInterface mutex")
+			im.mutex.Unlock()
+		}()
+
+		im.clients[iface] = c
+		im.cancels[iface] = cancel
+	}()
+
+	log.Debug().Str("iface", iface).Msg("starting client")
+
+	go func() {
+		im.wg.Add(1)
+
+		log.Info().Str("iface", iface).Msg("starting client")
+		err := c.Run(clientCtx, im.receivedCh)
+
+		// remove the client from the hashtables once done
+		func() {
+			im.mutex.Lock()
+			defer im.mutex.Unlock()
+
+			delete(im.clients, iface)
+			delete(im.cancels, iface)
+		}()
+
+		im.wg.Done()
+		if err != nil {
+			log.Error().Err(err).Msg("error while running client")
 		}
 
-		for _, c := range clients {
-			c.SendPing()
-		}
+		log.Info().Str("iface", iface).Err(err).Msg("client stopped")
+	}()
+
+	return nil
+}
+
+func (im *interfaceManager) removeInterface(iface string) error {
+	if !im.doesInterfaceExist(iface) {
+		return fmt.Errorf("interface %s does not exist", iface)
+	}
+
+	im.mutex.RLock()
+	defer im.mutex.Unlock()
+	im.cancels[iface]()
+
+	return nil
+}
+
+func (im *interfaceManager) wait() {
+	log.Debug().Msg("waiting for all clients to be done")
+	im.wg.Wait()
+	log.Debug().Msg("all clients are done")
+}
+
+func (im *interfaceManager) getClientInterfaces() []string {
+	im.mutex.RLock()
+	defer func() {
+		log.Trace().Msg("unlocking getClientInterfaces mutex")
+		im.mutex.RUnlock()
+	}()
+
+	var interfaces []string
+	for iface := range im.clients {
+		interfaces = append(interfaces, iface)
+	}
+
+	return interfaces
+}
+
+func Discover(ctx context.Context, msgCh chan PeerInformation, discoveryInterfaces []string, port uint16) error {
+	receivedCh := make(chan ReceivedMessage)
+
+	clientMap := newClientMap(port, &receivedCh)
+	id := newInterfaceDiscoverer(clientMap, discoveryInterfaces)
+
+	grp, ctx := errgroup.WithContext(ctx)
+	grp.Go(func() error {
+		return id.Run(ctx)
+	})
+
+	grp.Go(func() error {
+		log.Debug().Msg("Starting discovery loop")
 
 		peerLastSeen := make(map[string]time.Time)
 		peerTimeout := 30 * time.Second
@@ -167,9 +318,21 @@ func Discover(ctx context.Context, msgCh chan PeerInformation, port uint16) erro
 						delete(peerLastSeen, addr)
 					}
 				}
-				// here, we need to iterate over all the interfaces, create a new client if necessasry, and send a ping from it
-				for _, c := range clients {
-					c.SendPing()
+
+				clientMap.sendPing()
+
+			case newInterface := <-id.addedInterfaceCh:
+				log.Debug().Str("iface", newInterface).Msg("new interface discovered")
+				err := clientMap.addInterface(ctx, newInterface)
+				if err != nil {
+					return err
+				}
+
+			case removedInterface := <-id.removedInterfaceCh:
+				log.Debug().Str("iface", removedInterface).Msg("interface removed")
+				err := clientMap.removeInterface(removedInterface)
+				if err != nil {
+					return err
 				}
 
 			case msg := <-receivedCh:
@@ -195,10 +358,7 @@ func Discover(ctx context.Context, msgCh chan PeerInformation, port uint16) erro
 
 			case <-ctx.Done():
 				log.Info().Msg("waiting for clients to stop")
-				for _, cancel := range clientCancels {
-					cancel()
-				}
-				clientWg.Wait()
+				clientMap.wait()
 
 				return ctx.Err()
 			}
