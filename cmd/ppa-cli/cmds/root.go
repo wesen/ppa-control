@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	logger "ppa-control/lib/log"
+	"ppa-control/lib/utils"
 )
 
 var rootCmd = &cobra.Command{
@@ -37,6 +38,17 @@ var rootCmd = &cobra.Command{
 		case "fatal":
 			zerolog.SetGlobalLevel(zerolog.FatalLevel)
 		}
+
+		// TODO this will not compile on windows
+		memProfile, _ := cmd.Flags().GetString("dump-mem-profile")
+		log.Info().Str("memProfile", memProfile).Msg("Listening for SIGPOLL to dump stacktrace and memory profile")
+		utils.StartSIGPOLLStacktraceDumper(memProfile)
+
+		trackLeaks, _ := cmd.Flags().GetBool("track-leaks")
+		if trackLeaks {
+			log.Info().Msg("tracking memory and goroutine leaks")
+			utils.StartBackgroundLeakTracker()
+		}
 	},
 }
 
@@ -51,4 +63,6 @@ func init() {
 	rootCmd.PersistentFlags().String("log-level", "debug", "Log level")
 	rootCmd.PersistentFlags().String("log-format", "text", "Log format (json, text)")
 	rootCmd.PersistentFlags().Bool("with-caller", false, "Log caller")
+	rootCmd.PersistentFlags().String("dump-mem-profile", "", "Dump memory profile to file")
+	rootCmd.PersistentFlags().Bool("track-leaks", false, "Track memory and goroutine leaks")
 }
