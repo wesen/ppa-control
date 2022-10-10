@@ -1,4 +1,9 @@
 package logger
 
-func InitializeLogger() {
+import "github.com/rs/zerolog/log"
+
+func InitializeLogger(withCaller bool) {
+	if withCaller {
+		log.Logger = log.With().Caller().Logger()
+	}
 }

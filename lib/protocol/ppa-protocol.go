@@ -126,7 +126,7 @@ func EncodeHeader(w io.Writer, h *BasicHeader) error {
 	if err != nil {
 		return err
 	}
-	// XXX traditional way to do it
+	// TODO traditional way to do it
 	// binary.LittleEndian.PutUint16(w, p.CrtFlags)
 	return nil
 }

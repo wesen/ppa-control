@@ -47,7 +47,7 @@ type SimulatedDevice struct {
 	currentVolume         float32
 }
 
-func NewClient(settings SimulatedDeviceSettings) *SimulatedDevice {
+func NewSimulatedDevice(settings SimulatedDeviceSettings) *SimulatedDevice {
 	return &SimulatedDevice{
 		SendChannel:           make(chan Response),
 		ReceiveChannel:        make(chan *bytes.Buffer),
