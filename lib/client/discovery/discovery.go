@@ -87,10 +87,6 @@ func Discover(ctx context.Context, msgCh chan PeerInformation, discoveryInterfac
 						Str("type", msg.Header.MessageType.String()).
 						Str("status", msg.Header.Status.String()).
 						Msg("received message")
-				} else {
-					log.Debug().Str("from", msg.RemoteAddress.String()).
-						Str("client", msg.Client.Name()).
-						Msg("received unknown message")
 
 					_, peerFound := peerLastSeen[msg.RemoteAddress.String()]
 					peerLastSeen[msg.RemoteAddress.String()] = time.Now()
@@ -103,6 +99,10 @@ func Discover(ctx context.Context, msgCh chan PeerInformation, discoveryInterfac
 						}
 					}
 					log.Debug().Str("addr", msg.RemoteAddress.String()).Msg("peer lastSeen updated")
+				} else {
+					log.Debug().Str("from", msg.RemoteAddress.String()).
+						Str("client", msg.Client.Name()).
+						Msg("received unknown message")
 				}
 
 			case <-ctx.Done():
