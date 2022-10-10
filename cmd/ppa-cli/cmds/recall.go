@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"ppa-control/lib/client"
+	"ppa-control/lib/client/discovery"
 	"strings"
 	"time"
 )
@@ -16,7 +17,7 @@ var recallCmd = &cobra.Command{
 	Short: "Recall a preset by index",
 	Run: func(cmd *cobra.Command, args []string) {
 		addresses, _ := cmd.PersistentFlags().GetString("addresses")
-		discovery, _ := cmd.PersistentFlags().GetBool("discover")
+		discovery_, _ := cmd.PersistentFlags().GetBool("discover")
 		loop, _ := cmd.PersistentFlags().GetBool("loop")
 		componentId, _ := cmd.PersistentFlags().GetUint("componentId")
 		preset, _ := cmd.PersistentFlags().GetInt("preset")
@@ -31,11 +32,8 @@ var recallCmd = &cobra.Command{
 		ctx := context.Background()
 		grp, ctx := errgroup.WithContext(ctx)
 
-		if discovery {
-			// TODO(manuel) this should actually be moved into multiclient, as I used to have it
-			//
-			// in fact, discover
-			discoveryCh := make(chan client.PeerInformation)
+		if discovery_ {
+			discoveryCh := make(chan discovery.PeerInformation)
 			grp.Go(func() error {
 				for {
 					select {
@@ -44,16 +42,16 @@ var recallCmd = &cobra.Command{
 					case msg := <-discoveryCh:
 						log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
 						switch msg.(type) {
-						case client.PeerDiscovered:
+						case discovery.PeerDiscovered:
 							log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
-						case client.PeerLost:
+						case discovery.PeerLost:
 							log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
 						}
 					}
 				}
 			})
 			grp.Go(func() error {
-				return client.Discover(ctx, discoveryCh, nil, uint16(port))
+				return discovery.Discover(ctx, discoveryCh, nil, uint16(port))
 			})
 		}
 

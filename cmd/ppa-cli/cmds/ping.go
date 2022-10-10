@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"ppa-control/lib/client"
+	"ppa-control/lib/client/discovery"
 	"strings"
 	"time"
 )
@@ -24,7 +25,7 @@ var pingCmd = &cobra.Command{
 	Short: "SendPing one or multiple PPA servers",
 	Run: func(cmd *cobra.Command, args []string) {
 		addresses, _ := cmd.PersistentFlags().GetString("addresses")
-		discovery, _ := cmd.PersistentFlags().GetBool("discover")
+		discovery_, _ := cmd.PersistentFlags().GetBool("discover")
 		componentId, _ := cmd.PersistentFlags().GetUint("componentId")
 
 		port, _ := cmd.PersistentFlags().GetUint("port")
@@ -39,10 +40,10 @@ var pingCmd = &cobra.Command{
 		ctx := context.Background()
 		grp, ctx := errgroup.WithContext(ctx)
 
-		if discovery {
+		if discovery_ {
 			interfaces, _ := cmd.PersistentFlags().GetStringArray("interfaces")
 
-			discoveryCh := make(chan client.PeerInformation)
+			discoveryCh := make(chan discovery.PeerInformation)
 			grp.Go(func() error {
 				for {
 					select {
@@ -51,16 +52,16 @@ var pingCmd = &cobra.Command{
 					case msg := <-discoveryCh:
 						log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
 						switch msg.(type) {
-						case client.PeerDiscovered:
+						case discovery.PeerDiscovered:
 							log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
-						case client.PeerLost:
+						case discovery.PeerLost:
 							log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
 						}
 					}
 				}
 			})
 			grp.Go(func() error {
-				return client.Discover(ctx, discoveryCh, interfaces, uint16(port))
+				return discovery.Discover(ctx, discoveryCh, interfaces, uint16(port))
 			})
 		}
 
