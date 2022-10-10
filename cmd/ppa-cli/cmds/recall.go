@@ -2,7 +2,6 @@ package cmds
 
 import (
 	"context"
-	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -18,55 +17,72 @@ var recallCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		addresses, _ := cmd.PersistentFlags().GetString("addresses")
 		discovery_, _ := cmd.PersistentFlags().GetBool("discover")
-		loop, _ := cmd.PersistentFlags().GetBool("loop")
+		//loop, _ := cmd.PersistentFlags().GetBool("loop")
 		componentId, _ := cmd.PersistentFlags().GetUint("componentId")
 		preset, _ := cmd.PersistentFlags().GetInt("preset")
 
 		port, _ := cmd.PersistentFlags().GetUint("port")
 
-		var clients []client.Client
-		for _, addr := range strings.Split(addresses, ",") {
-			clients = append(clients, client.NewClient(fmt.Sprintf("%s:%d", addr, port), int(componentId)))
-		}
-		multiClient := client.NewMultiClient(clients)
 		ctx := context.Background()
 		grp, ctx := errgroup.WithContext(ctx)
 
+		discoveryCh := make(chan discovery.PeerInformation)
+		receivedCh := make(chan client.ReceivedMessage)
+
+		multiClient := client.NewMultiClient()
+		for _, addr := range strings.Split(addresses, ",") {
+			if addr == "" {
+				continue
+			}
+			_, err := multiClient.StartClient(ctx, addr, componentId)
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed to add client")
+			}
+		}
+
 		if discovery_ {
-			discoveryCh := make(chan discovery.PeerInformation)
-			grp.Go(func() error {
-				for {
-					select {
-					case <-ctx.Done():
-						return nil
-					case msg := <-discoveryCh:
-						log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
-						switch msg.(type) {
-						case discovery.PeerDiscovered:
-							log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
-						case discovery.PeerLost:
-							log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
-						}
-					}
-				}
-			})
 			grp.Go(func() error {
 				return discovery.Discover(ctx, discoveryCh, nil, uint16(port))
 			})
 		}
 
-		receivedCh := make(chan client.ReceivedMessage)
-
 		grp.Go(func() error {
-			// TODO print out received messages
 			return multiClient.Run(ctx, &receivedCh)
 		})
 
 		grp.Go(func() error {
+			// TODO we do need to wait for this to have made it at least out of the socket
+			multiClient.SendPresetRecallByPresetIndex(preset)
+
+			preset = (preset + 1) % 5
+
 			for {
+				t := time.NewTicker(5 * time.Second)
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
+
+				case msg := <-discoveryCh:
+					log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
+					switch msg.(type) {
+					case discovery.PeerDiscovered:
+						log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
+						c, err := multiClient.StartClient(ctx, msg.GetAddress(), componentId)
+						if err != nil {
+							log.Error().Err(err).Msg("failed to add client")
+							return err
+						}
+						// immediately send preset recall on discovery
+						c.SendPresetRecallByPresetIndex(preset)
+					case discovery.PeerLost:
+						log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
+						err := multiClient.CancelClient(msg.GetAddress())
+						if err != nil {
+							log.Error().Err(err).Msg("failed to remove client")
+							return err
+						}
+					}
+
 				case msg := <-receivedCh:
 					if msg.Header != nil {
 						log.Info().Str("from", msg.RemoteAddress.String()).
@@ -81,24 +97,10 @@ var recallCmd = &cobra.Command{
 							Msg("received unknown message")
 					}
 
+				case <-t.C:
+					multiClient.SendPresetRecallByPresetIndex(preset)
 				}
 			}
-		})
-
-		grp.Go(func() error {
-			multiClient.SendPresetRecallByPresetIndex(preset)
-			if loop {
-				for {
-					preset = (preset + 1) % 5
-					t := time.NewTicker(5 * time.Second)
-					select {
-					case <-t.C:
-						multiClient.SendPresetRecallByPresetIndex(preset)
-					}
-				}
-			}
-
-			return nil
 		})
 
 		err := grp.Wait()
@@ -106,7 +108,6 @@ var recallCmd = &cobra.Command{
 			log.Error().Err(err).Msg("Error running multiclient")
 			return
 		}
-
 	},
 }
 

@@ -2,7 +2,6 @@ package cmds
 
 import (
 	"context"
-	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -30,42 +29,29 @@ var pingCmd = &cobra.Command{
 
 		port, _ := cmd.PersistentFlags().GetUint("port")
 
-		var clients []client.Client
-		for _, addr := range strings.Split(addresses, ",") {
-			if addr != "" {
-				clients = append(clients, client.NewClient(fmt.Sprintf("%s:%d", addr, port), int(componentId)))
-			}
-		}
-		multiClient := client.NewMultiClient(clients)
 		ctx := context.Background()
 		grp, ctx := errgroup.WithContext(ctx)
 
+		discoveryCh := make(chan discovery.PeerInformation)
+		receivedCh := make(chan client.ReceivedMessage)
+
+		multiClient := client.NewMultiClient()
+		for _, addr := range strings.Split(addresses, ",") {
+			if addr == "" {
+				continue
+			}
+			_, err := multiClient.StartClient(ctx, addr, componentId)
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed to add client")
+			}
+		}
+
 		if discovery_ {
 			interfaces, _ := cmd.PersistentFlags().GetStringArray("interfaces")
-
-			discoveryCh := make(chan discovery.PeerInformation)
-			grp.Go(func() error {
-				for {
-					select {
-					case <-ctx.Done():
-						return nil
-					case msg := <-discoveryCh:
-						log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
-						switch msg.(type) {
-						case discovery.PeerDiscovered:
-							log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
-						case discovery.PeerLost:
-							log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
-						}
-					}
-				}
-			})
 			grp.Go(func() error {
 				return discovery.Discover(ctx, discoveryCh, interfaces, uint16(port))
 			})
 		}
-
-		receivedCh := make(chan client.ReceivedMessage)
 
 		grp.Go(func() error {
 			// runs both the send and read loops
@@ -97,9 +83,30 @@ var pingCmd = &cobra.Command{
 							Str("client", msg.Client.Name()).
 							Msg("received unknown message")
 					}
+
+				// this won't trigger if the discovery loop is not running
+				case msg := <-discoveryCh:
+					log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
+					switch msg.(type) {
+					case discovery.PeerDiscovered:
+						log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
+						c, err := multiClient.StartClient(ctx, msg.GetAddress(), componentId)
+						if err != nil {
+							log.Error().Err(err).Msg("failed to add client")
+							return err
+						}
+						// send immediate ping
+						c.SendPing()
+					case discovery.PeerLost:
+						log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
+						err := multiClient.CancelClient(msg.GetAddress())
+						if err != nil {
+							log.Error().Err(err).Msg("failed to remove client")
+							return err
+						}
+					}
 				}
 			}
-
 		})
 
 		err := grp.Wait()

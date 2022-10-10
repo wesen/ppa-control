@@ -66,7 +66,7 @@ func Discover(ctx context.Context, msgCh chan PeerInformation, discoveryInterfac
 
 			case newInterface := <-interfaceDiscoverer.addedInterfaceCh:
 				log.Debug().Str("iface", newInterface).Msg("new interface discovered")
-				err, c := interfaceManager.CreateInterfaceClient(ctx, newInterface)
+				err, c := interfaceManager.StartInterfaceClient(ctx, newInterface)
 				if err != nil {
 					return err
 				}

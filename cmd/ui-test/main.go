@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"image/color"
 	"ppa-control/lib/client"
+	"ppa-control/lib/client/discovery"
 	"strings"
 )
 
@@ -22,24 +23,37 @@ var (
 	address     = flag.String("address", "127.0.0.1", "board address")
 	port        = flag.Uint("port", 5001, "default port")
 	addresses   = flag.String("addresses", "", "multiple board addresses")
-	componentId = flag.Int("component-id", 0xff, "default component ID (default: 0xff)")
+	componentId = flag.Uint("component-id", 0xff, "default component ID (default: 0xff)")
 )
 
 func main() {
 	flag.Parse()
 	serverString := fmt.Sprintf("%s:%d", *address, *port)
-	var clients []client.Client
+
+	ctx, cancel := context.WithCancel(context.Background())
+	grp, ctx2 := errgroup.WithContext(ctx)
+
+	receivedCh := make(chan client.ReceivedMessage)
+	discoveryCh := make(chan discovery.PeerInformation)
+
+	multiClient := client.NewMultiClient()
 	if *addresses != "" {
 		for _, addr := range strings.Split(*addresses, ",") {
+			if addr == "" {
+				continue
+			}
 			log.Info().Msgf("adding client %s", addr)
-			c2 := client.NewClient(fmt.Sprintf("%v:%d", addr, *port), *componentId)
-			clients = append(clients, c2)
+			_, err := multiClient.StartClient(ctx2, addr, *componentId)
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed to add client")
+			}
 		}
 	} else {
-		c2 := client.NewClient(serverString, *componentId)
-		clients = append(clients, c2)
+		_, err := multiClient.StartClient(ctx2, serverString, *componentId)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to add client")
+		}
 	}
-	c := client.NewMultiClient(clients)
 
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
@@ -59,7 +73,7 @@ func main() {
 		j := i
 		presetButtons[i] = widget.NewButton(fmt.Sprintf("Preset %d", i+1),
 			func() {
-				c.SendPresetRecallByPresetIndex(j)
+				multiClient.SendPresetRecallByPresetIndex(j)
 				log.Info().Msg(fmt.Sprintf("Preset %d clicked", j+1))
 			})
 	}
@@ -126,7 +140,6 @@ func main() {
 	w.SetContent(mainHBox) // This is a text entry field
 	w.Resize(fyne.NewSize(800, 800))
 
-	ctx, cancel := context.WithCancel(context.Background())
 	fmt.Printf("Connecting to %s\n", serverString)
 
 	w.SetOnClosed(func() {
@@ -135,12 +148,14 @@ func main() {
 		log.Info().Msg("After cancel")
 	})
 
-	grp, ctx2 := errgroup.WithContext(ctx)
-	receivedCh := make(chan client.ReceivedMessage)
 	grp.Go(func() error {
-		// TODO handle incoming messages
-		return c.Run(ctx2, &receivedCh)
+		return multiClient.Run(ctx2, &receivedCh)
 	})
+	grp.Go(func() error {
+		var interfaces []string
+		return discovery.Discover(ctx2, discoveryCh, interfaces, uint16(*port))
+	})
+
 	grp.Go(func() error {
 		for {
 			select {
@@ -159,12 +174,31 @@ func main() {
 						Str("client", msg.Client.Name()).
 						Msg("received unknown message")
 				}
+			case msg := <-discoveryCh:
+				log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
+				switch msg.(type) {
+				case discovery.PeerDiscovered:
+					log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
+					c, err := multiClient.StartClient(ctx, msg.GetAddress(), *componentId)
+					if err != nil {
+						log.Error().Err(err).Msg("failed to add client")
+						return err
+					}
+					// send immediate ping
+					c.SendPing()
+				case discovery.PeerLost:
+					log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
+					err := multiClient.CancelClient(msg.GetAddress())
+					if err != nil {
+						log.Error().Err(err).Msg("failed to remove client")
+						return err
+					}
+				}
 			}
 		}
 	})
-	grp.Go(func() error {
-		return c.Discover(ctx2, uint16(*port))
-	})
+
+	// TODO this feels quite odd, let's learn more about fyne next
 	go func() {
 		log.Debug().Msg("Waiting for main loop")
 		err := grp.Wait()

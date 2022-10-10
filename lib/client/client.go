@@ -45,13 +45,14 @@ type ReceivedMessage struct {
 type SingleDevice struct {
 	Address     string
 	SendChannel chan *bytes.Buffer
-	ComponentId int
+	ComponentId uint
 	seqCmd      uint16
 }
 
-func NewClient(address string, componentId int) *SingleDevice {
+func NewSingleDevice(address string, componentId uint) *SingleDevice {
 	return &SingleDevice{
-		SendChannel: make(chan *bytes.Buffer),
+		// This channel is buffered to avoid blocking senders.
+		SendChannel: make(chan *bytes.Buffer, 10),
 		Address:     address,
 		ComponentId: componentId,
 		seqCmd:      1,
@@ -119,7 +120,7 @@ func (c *SingleDevice) Run(ctx context.Context, receivedCh *chan ReceivedMessage
 	// there is a private method newUDPConn that we could use, but it's not exported.
 	//
 	// But we can get a PacketConn, which is maybe good too?
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return
 	}

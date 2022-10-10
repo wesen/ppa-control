@@ -57,7 +57,9 @@ func (im *InterfaceManager) DoesInterfaceExist(iface string) bool {
 	return ok
 }
 
-func (im *InterfaceManager) CreateInterfaceClient(ctx context.Context, iface string) (error, *client.SingleDevice) {
+// StartInterfaceClient will create and start a client for the given interface,
+// with target address the broadcast address 255.255.255.255 .
+func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface string) (error, *client.SingleDevice) {
 	if im.waiting.Load() {
 		panic("cannot add interface while waiting for clients to be done")
 	}
@@ -73,14 +75,14 @@ func (im *InterfaceManager) CreateInterfaceClient(ctx context.Context, iface str
 	broadcastAddr := fmt.Sprintf("255.255.255.255:%d", im.port)
 
 	// now, create a client bound to the interface with the address being 255.255.255.255
-	c := client.NewClient(broadcastAddr, 0xfe)
+	c := client.NewSingleDevice(broadcastAddr, 0xfe)
 
 	clientCtx, cancel := context.WithCancel(ctx)
 	log.Debug().Str("iface", iface).Msg("adding client")
 	func() {
 		im.mutex.Lock()
 		defer func() {
-			log.Trace().Str("iface", iface).Msg("unlocking CreateInterfaceClient mutex")
+			log.Trace().Str("iface", iface).Msg("unlocking StartInterfaceClient mutex")
 			im.mutex.Unlock()
 		}()
 
@@ -125,7 +127,7 @@ func (im *InterfaceManager) CancelInterfaceClient(iface string) error {
 	}
 
 	im.mutex.RLock()
-	defer im.mutex.Unlock()
+	defer im.mutex.RUnlock()
 	im.cancels[iface]()
 
 	return nil
