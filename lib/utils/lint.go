@@ -61,10 +61,10 @@ func printMemUsage() {
 	fmt.Printf("\tNumGC = %v\n", m.NumGC)
 }
 
-func StartBackgroundLeakTracker() {
+func StartBackgroundLeakTracker(interval time.Duration) {
 	go func() {
 		for {
-			time.Sleep(time.Second * 5)
+			time.Sleep(interval)
 			runtime.GC()
 			fmt.Println()
 			printMemUsage()

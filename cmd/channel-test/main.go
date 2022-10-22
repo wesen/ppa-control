@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"golang.org/x/sync/errgroup"
 	"math/rand"
+	"ppa-control/lib/utils"
 	"time"
 )
 
@@ -65,6 +66,9 @@ func poller(ctx context.Context, stringCh chan string) error {
 }
 
 func main() {
+	utils.StartBackgroundLeakTracker(20 * time.Second)
+	utils.StartSIGPOLLStacktraceDumper("")
+
 	grp, ctx := errgroup.WithContext(context.Background())
 	stringCh := make(chan string)
 

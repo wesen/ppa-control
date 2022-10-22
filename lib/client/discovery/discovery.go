@@ -28,12 +28,21 @@ func (c PeerLost) GetAddress() string {
 	return c.addr
 }
 
-func Discover(ctx context.Context, msgCh chan PeerInformation, discoveryInterfaces []string, port uint16) error {
+func Discover(
+	ctx context.Context,
+	msgCh chan PeerInformation,
+	discoveryInterfaces []string,
+	port uint16) error {
 	receivedCh := make(chan client.ReceivedMessage)
 
 	interfaceManager := NewInterfaceManager(port, &receivedCh)
 	interfaceDiscoverer := NewInterfaceDiscoverer(interfaceManager, discoveryInterfaces)
 
+	// start the discoverer:
+	//   - GR1: interfaceDiscoverer.Run() which writes to addedInterfaceCh and removedInterfaceCh
+	//   - GR2: Run() which reads from addedInterfaceCh and removedInterfaceCh
+	//
+	// GR1 and GR2 use the same context tree
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
 		return interfaceDiscoverer.Run(ctx)

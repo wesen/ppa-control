@@ -8,6 +8,7 @@ import (
 	"os"
 	logger "ppa-control/lib/log"
 	"ppa-control/lib/utils"
+	"time"
 )
 
 var rootCmd = &cobra.Command{
@@ -47,7 +48,7 @@ var rootCmd = &cobra.Command{
 		trackLeaks, _ := cmd.Flags().GetBool("track-leaks")
 		if trackLeaks {
 			log.Info().Msg("tracking memory and goroutine leaks")
-			utils.StartBackgroundLeakTracker()
+			utils.StartBackgroundLeakTracker(5 * time.Second)
 		}
 	},
 }
