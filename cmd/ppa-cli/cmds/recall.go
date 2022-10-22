@@ -34,7 +34,7 @@ var recallCmd = &cobra.Command{
 			if addr == "" {
 				continue
 			}
-			_, err := multiClient.StartClient(ctx, addr, componentId)
+			_, err := multiClient.AddClient(ctx, addr, componentId)
 			if err != nil {
 				log.Fatal().Err(err).Msg("failed to add client")
 			}
@@ -67,7 +67,7 @@ var recallCmd = &cobra.Command{
 					switch msg.(type) {
 					case discovery.PeerDiscovered:
 						log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
-						c, err := multiClient.StartClient(ctx, msg.GetAddress(), componentId)
+						c, err := multiClient.AddClient(ctx, msg.GetAddress(), componentId)
 						if err != nil {
 							log.Error().Err(err).Msg("failed to add client")
 							return err

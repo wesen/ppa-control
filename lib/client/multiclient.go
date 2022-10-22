@@ -57,7 +57,7 @@ func (mc *MultiClient) DoesClientExist(addr string) bool {
 	return exists
 }
 
-func (mc *MultiClient) StartClient(ctx context.Context, addr string, componentId uint) (Client, error) {
+func (mc *MultiClient) AddClient(ctx context.Context, addr string, componentId uint) (Client, error) {
 	if mc.waiting.Load() {
 		panic("cannot add client while waiting for clients to be done")
 	}

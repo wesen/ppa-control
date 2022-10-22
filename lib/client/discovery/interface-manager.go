@@ -72,15 +72,15 @@ func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface Inte
 		return fmt.Errorf("interface %s already exists", iface), nil
 	}
 
-	log.Debug().Str("iface", iface).Msg("creating client")
-
 	broadcastAddr := fmt.Sprintf("255.255.255.255:%d", im.port)
+
+	log.Debug().Str("iface", iface).Str("addr", broadcastAddr).Msg("creating client")
 
 	// now, create a client bound to the interface with the address being 255.255.255.255
 	c := client.NewSingleDevice(broadcastAddr, 0xfe)
 
 	clientCtx, cancel := context.WithCancel(ctx)
-	log.Debug().Str("iface", iface).Msg("adding client")
+	log.Debug().Str("iface", iface).Str("addr", broadcastAddr).Msg("adding client")
 	func() {
 		im.mutex.Lock()
 		defer func() {

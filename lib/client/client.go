@@ -177,7 +177,6 @@ func (c *SingleDevice) sendLoop(ctx context.Context, conn *net.UDPConn, raddr *n
 						Int("length", buf.Len()).
 						Int("written", n).
 						Msg("Written packet")
-
 				}
 			}()
 		}
@@ -218,7 +217,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 			switch v := err.(type) {
 			case *net.OpError:
 				if v.Timeout() {
-					log.Trace().Msg("Read timeout")
+					log.Debug().Msg("Read timeout")
 					continue
 				}
 				switch v2 := v.Err.(type) {
