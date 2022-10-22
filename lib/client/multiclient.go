@@ -10,7 +10,8 @@ import (
 )
 
 type MultiClient struct {
-	wg sync.WaitGroup
+	wg   sync.WaitGroup
+	name string
 
 	// maps from address to client
 	mutex   sync.RWMutex
@@ -22,8 +23,9 @@ type MultiClient struct {
 	waiting atomic.Bool
 }
 
-func NewMultiClient() *MultiClient {
+func NewMultiClient(name string) *MultiClient {
 	return &MultiClient{
+		name:       name,
 		clients:    make(map[string]Client),
 		cancels:    make(map[string]context.CancelFunc),
 		receivedCh: make(chan ReceivedMessage, 10),
@@ -57,44 +59,65 @@ func (mc *MultiClient) DoesClientExist(addr string) bool {
 	return exists
 }
 
-func (mc *MultiClient) StartClient(ctx context.Context, addr string, componentId uint) (Client, error) {
+func (mc *MultiClient) AddClient(ctx context.Context, addrPort string, iface string, componentId uint) (Client, error) {
 	if mc.waiting.Load() {
 		panic("cannot add client while waiting for clients to be done")
 	}
 
-	log.Debug().Str("addr", addr).Msg("adding client")
-	if mc.DoesClientExist(addr) {
-		log.Error().Str("addr", addr).Msg("client already exists")
-		return nil, fmt.Errorf("client for %s already exists", addr)
+	log.Debug().
+		Str("name", mc.name).
+		Str("iface", iface).
+		Str("addrPort", addrPort).
+		Msg("adding client")
+	if mc.DoesClientExist(addrPort) {
+		log.Error().
+			Str("name", mc.name).
+			Str("iface", iface).
+			Str("addrPort", addrPort).
+			Msg("client already exists")
+		return nil, fmt.Errorf("client for %s already exists", addrPort)
 	}
 
-	c := NewSingleDevice(addr, componentId)
+	c := NewSingleDevice(addrPort, iface, componentId)
 	clientCtx, cancel := context.WithCancel(ctx)
 	func() {
 		mc.mutex.Lock()
 		defer mc.mutex.Unlock()
-		mc.clients[addr] = c
-		mc.cancels[addr] = cancel
+		mc.clients[addrPort] = c
+		mc.cancels[addrPort] = cancel
 	}()
 
 	go func() {
 		mc.wg.Add(1)
 
-		log.Info().Str("addr", addr).Msg("starting client")
+		log.Info().
+			Str("name", mc.name).
+			Str("iface", iface).
+			Str("addrPort", addrPort).
+			Msg("starting client")
 		err := c.Run(clientCtx, &mc.receivedCh)
 
 		func() {
 			mc.mutex.Lock()
 			defer mc.mutex.Unlock()
-			delete(mc.clients, addr)
-			delete(mc.cancels, addr)
+			delete(mc.clients, addrPort)
+			delete(mc.cancels, addrPort)
 		}()
 
 		mc.wg.Done()
 		if err != nil {
-			log.Error().Str("addr", addr).Err(err).Msg("client stopped with error")
+			log.Error().
+				Str("name", mc.name).
+				Str("iface", iface).
+				Str("addrPort", addrPort).
+				Err(err).
+				Msg("client stopped with error")
 		} else {
-			log.Info().Str("addr", addr).Msg("client stopped")
+			log.Info().
+				Str("name", mc.name).
+				Str("iface", iface).
+				Str("addrPort", addrPort).
+				Msg("client stopped")
 		}
 	}()
 
@@ -106,9 +129,15 @@ func (mc *MultiClient) CancelClient(addr string) error {
 		panic("cannot remove client while waiting for clients to be done")
 	}
 
-	log.Debug().Str("addr", addr).Msg("adding client")
+	log.Debug().
+		Str("name", mc.name).
+		Str("addr", addr).
+		Msg("adding client")
 	if !mc.DoesClientExist(addr) {
-		log.Error().Str("addr", addr).Msg("client does not exist")
+		log.Error().
+			Str("name", mc.name).
+			Str("addr", addr).
+			Msg("client does not exist")
 		return fmt.Errorf("client for %s does not exist", addr)
 	}
 
@@ -126,7 +155,9 @@ func (mc *MultiClient) Run(ctx context.Context, receivedCh *chan ReceivedMessage
 			*receivedCh <- m
 
 		case <-ctx.Done():
-			log.Debug().Msg("context done, stopping multiclient")
+			log.Debug().
+				Str("name", mc.name).
+				Msg("context done, stopping multiclient")
 			mc.waiting.Store(true)
 
 			func() {
@@ -139,7 +170,9 @@ func (mc *MultiClient) Run(ctx context.Context, receivedCh *chan ReceivedMessage
 			}()
 
 			mc.wg.Wait()
-			log.Debug().Msg("multiclient stopped")
+			log.Debug().
+				Str("name", mc.name).
+				Msg("multiclient stopped")
 
 			// do I need to drain channels here?
 			// All clients have been closed at this point, so no one is writing

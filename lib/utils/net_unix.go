@@ -1,6 +1,6 @@
 //go:build linux
 
-package simulation
+package utils
 
 import (
 	"context"

@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"ppa-control/lib/protocol"
+	"ppa-control/lib/utils"
 	"syscall"
 	"time"
 )
@@ -37,23 +38,26 @@ type Client interface {
 type ReceivedMessage struct {
 	Header        *protocol.BasicHeader
 	RemoteAddress net.Addr
+	Interface     string
 	Body          interface{}
 	Data          []byte
 	Client        Client
 }
 
 type SingleDevice struct {
-	Address     string
+	AddrPort    string
+	Interface   string
 	SendChannel chan *bytes.Buffer
 	ComponentId uint
 	seqCmd      uint16
 }
 
-func NewSingleDevice(address string, componentId uint) *SingleDevice {
+func NewSingleDevice(address string, iface string, componentId uint) *SingleDevice {
 	return &SingleDevice{
 		// This channel is buffered to avoid blocking senders.
 		SendChannel: make(chan *bytes.Buffer, 10),
-		Address:     address,
+		Interface:   iface,
+		AddrPort:    address,
 		ComponentId: componentId,
 		seqCmd:      1,
 	}
@@ -76,7 +80,11 @@ func (c *SingleDevice) SendPing() {
 		log.Warn().Str("error", err.Error()).Msg("Failed to encode header")
 		return
 	}
-	log.Debug().Str("address", c.Address).Msg("Sending ping to SendChannel")
+	log.Debug().
+		Str("address", c.AddrPort).
+		Str("interface", c.Interface).
+		Int("length", buf.Len()).
+		Msg("Sending ping to SendChannel")
 	c.SendChannel <- buf
 }
 
@@ -103,7 +111,11 @@ func (c *SingleDevice) SendPresetRecallByPresetIndex(index int) {
 		log.Warn().Str("error", err.Error()).Msg("Failed to encode preset recall")
 		return
 	}
-	log.Debug().Str("address", c.Address).Msg("Sending preset recall")
+	log.Debug().
+		Str("address", c.AddrPort).
+		Str("interface", c.Interface).
+		Int("length", buf.Len()).
+		Msg("Sending preset recall")
 	c.SendChannel <- buf
 }
 
@@ -111,20 +123,17 @@ func (c *SingleDevice) SendPresetRecallByPresetIndex(index int) {
 // and emit them on the UDP socket, and it will listen for incoming packets on the UDP socket,
 // parse them and emit them on the receiveChannel.
 func (c *SingleDevice) Run(ctx context.Context, receivedCh *chan ReceivedMessage) (err error) {
-	raddr, err := net.ResolveUDPAddr("udp", c.Address)
+	raddr, err := net.ResolveUDPAddr("udp", c.AddrPort)
 	if err != nil {
 		return
 	}
-
-	// TODO: if we want to bind this connection to an interface, we need to figure out how to control a UDPConn
-	// there is a private method newUDPConn that we could use, but it's not exported.
-	//
-	// But we can get a PacketConn, which is maybe good too?
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	conn, err := utils.ListenUDP(ctx, "0.0.0.0:0", c.Interface)
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
@@ -135,14 +144,14 @@ func (c *SingleDevice) Run(ctx context.Context, receivedCh *chan ReceivedMessage
 		return c.sendLoop(ctx, conn, raddr)
 	})
 
-	log.Info().Str("address", c.Address).Msg("Client started")
+	log.Info().Str("address", c.AddrPort).Msg("Client started")
 	return grp.Wait()
 }
 
-func (c *SingleDevice) sendLoop(ctx context.Context, conn *net.UDPConn, raddr *net.UDPAddr) error {
-	log.Info().Str("address", c.Address).Msg("Starting send loop")
+func (c *SingleDevice) sendLoop(ctx context.Context, conn net.PacketConn, raddr *net.UDPAddr) error {
+	log.Info().Str("address", c.AddrPort).Msg("Starting send loop")
 	defer func() {
-		log.Info().Str("address", c.Address).Msg("Exiting send loop")
+		log.Info().Str("address", c.AddrPort).Msg("Exiting send loop")
 	}()
 	for {
 		select {
@@ -152,39 +161,40 @@ func (c *SingleDevice) sendLoop(ctx context.Context, conn *net.UDPConn, raddr *n
 
 		case buf := <-c.SendChannel:
 			go func() {
-				log.Debug().Str("address", c.Address).Int("len", buf.Len()).Msg("Sending packet")
+				log.Debug().Str("address", c.AddrPort).
+					Int("len", buf.Len()).
+					Msg("Sending packet")
 				deadline := time.Now().Add(Timeout)
 				err := conn.SetWriteDeadline(deadline)
 				if err != nil {
 					log.Warn().
 						Err(err).
-						Str("address", c.Address).
+						Str("address", c.AddrPort).
 						Msg("Failed to set write deadline")
 				}
-				n, err := conn.WriteToUDP(buf.Bytes(), raddr)
+				n, err := conn.WriteTo(buf.Bytes(), raddr)
 				if err != nil {
 					log.Warn().
 						Err(err).
-						Str("to", c.Address).
+						Str("to", c.AddrPort).
 						Str("local", conn.LocalAddr().String()).
 						Int("length", buf.Len()).
 						Bytes("data", buf.Bytes()).
 						Msg("Failed to write to connection")
 				} else {
 					log.Debug().
-						Str("to", c.Address).
+						Str("to", c.AddrPort).
 						Str("from", conn.LocalAddr().String()).
 						Int("length", buf.Len()).
 						Int("written", n).
 						Msg("Written packet")
-
 				}
 			}()
 		}
 	}
 }
 
-func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, receivedCh *chan ReceivedMessage) error {
+func (c *SingleDevice) readLoop(ctx context.Context, conn net.PacketConn, receivedCh *chan ReceivedMessage) error {
 	defer func() {
 		log.Info().
 			Str("address", conn.LocalAddr().String()).
@@ -218,7 +228,6 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 			switch v := err.(type) {
 			case *net.OpError:
 				if v.Timeout() {
-					log.Trace().Msg("Read timeout")
 					continue
 				}
 				switch v2 := v.Err.(type) {
@@ -239,6 +248,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 		}
 		log.Info().Int("received", nRead).
 			Str("from", addr.String()).
+			Str("iface", c.Interface).
 			Str("local", conn.LocalAddr().String()).
 			Bytes("data", buffer[:nRead]).
 			Msg("Received packet")
@@ -253,6 +263,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 			if receivedCh != nil {
 				*receivedCh <- ReceivedMessage{
 					Header:        nil,
+					Interface:     c.Interface,
 					RemoteAddress: addr,
 					Client:        c,
 					Body:          nil,
@@ -268,6 +279,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 			*receivedCh <- ReceivedMessage{
 				Header:        hdr,
 				RemoteAddress: addr,
+				Interface:     c.Interface,
 				Client:        c,
 				Body:          nil,
 				Data:          buffer[:nRead],
@@ -277,5 +289,5 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn *net.UDPConn, received
 }
 
 func (c *SingleDevice) Name() string {
-	return fmt.Sprintf("SingleDevice-%s", c.Address)
+	return fmt.Sprintf("SingleDevice-%s", c.AddrPort)
 }

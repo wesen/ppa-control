@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"net"
 	"ppa-control/lib/protocol"
+	"ppa-control/lib/utils"
 	"time"
 )
 
@@ -59,7 +60,7 @@ func NewSimulatedDevice(settings SimulatedDeviceSettings) *SimulatedDevice {
 
 func (sd *SimulatedDevice) Run(ctx context.Context) (err error) {
 	serverString := fmt.Sprintf("%s:%d", sd.Settings.Address, sd.Settings.Port)
-	conn, err := ListenUDPBroadcast(ctx, serverString, sd.Settings.Interface)
+	conn, err := utils.ListenUDP(ctx, serverString, sd.Settings.Interface)
 
 	if err != nil {
 		log.Error().
@@ -111,7 +112,14 @@ func (sd *SimulatedDevice) Run(ctx context.Context) (err error) {
 
 			if n > 0 {
 
-				switch protocol.MessageType(buffer[0]) {
+				messageType := protocol.MessageType(buffer[0])
+				log.Debug().
+					Str("messageType", messageType.String()).
+					Str("from", srcAddr.String()).
+					Str("local", conn.LocalAddr().String()).
+					Msg("Received message")
+
+				switch messageType {
 				case protocol.MessageTypePing:
 					{
 						err := sd.handlePing(request)
@@ -231,6 +239,7 @@ func (sd *SimulatedDevice) handlePing(req *Request) error {
 	return nil
 }
 
+// TODO All these responses are wrong
 func (sd *SimulatedDevice) handleLiveCmd(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
@@ -260,6 +269,7 @@ func (sd *SimulatedDevice) handleLiveCmd(req *Request) error {
 	return nil
 }
 
+// TODO All these responses are wrong
 func (sd *SimulatedDevice) handleDeviceData(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
@@ -290,15 +300,16 @@ func (sd *SimulatedDevice) handleDeviceData(req *Request) error {
 
 }
 
+// TODO All these responses are wrong
 func (sd *SimulatedDevice) handlePresetRecall(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
-		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
+		log.Error().Str("error", err.Error()).Msg("Could not parse recall header")
 		return err
 	}
 
 	response := protocol.NewBasicHeader(
-		protocol.MessageTypePing,
+		protocol.MessageTypePresetRecall,
 		protocol.StatusResponseServer,
 		sd.Settings.UniqueId,
 		hdr.SequenceNumber,
@@ -319,6 +330,7 @@ func (sd *SimulatedDevice) handlePresetRecall(req *Request) error {
 	return nil
 }
 
+// TODO All these responses are wrong
 func (sd *SimulatedDevice) handlePresetSave(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {

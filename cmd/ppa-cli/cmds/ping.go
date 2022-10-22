@@ -2,6 +2,7 @@ package cmds
 
 import (
 	"context"
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -45,12 +46,15 @@ var pingCmd = &cobra.Command{
 		discoveryCh := make(chan discovery.PeerInformation)
 		receivedCh := make(chan client.ReceivedMessage)
 
-		multiClient := client.NewMultiClient()
+		multiClient := client.NewMultiClient("ping")
 		for _, addr := range strings.Split(addresses, ",") {
 			if addr == "" {
 				continue
 			}
-			_, err := multiClient.StartClient(ctx, addr, componentId)
+			// although that's weird, in the case I want to specify over which iface to reach things.
+			// say i have a simulated client bound to en0, then this will resolve the iface to be lo0.
+			// this might mostly just be an issue with local testing.
+			_, err := multiClient.AddClient(ctx, fmt.Sprintf("%s:%d", addr, port), "", componentId)
 			if err != nil {
 				log.Fatal().Err(err).Msg("failed to add client")
 			}
@@ -99,8 +103,11 @@ var pingCmd = &cobra.Command{
 					log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
 					switch msg.(type) {
 					case discovery.PeerDiscovered:
-						log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
-						c, err := multiClient.StartClient(ctx, msg.GetAddress(), componentId)
+						log.Info().
+							Str("addr", msg.GetAddress()).
+							Str("iface", msg.GetInterface()).
+							Msg("peer discovered")
+						c, err := multiClient.AddClient(ctx, msg.GetAddress(), msg.GetInterface(), componentId)
 						if err != nil {
 							log.Error().Err(err).Msg("failed to add client")
 							return err
@@ -108,7 +115,10 @@ var pingCmd = &cobra.Command{
 						// send immediate ping
 						c.SendPing()
 					case discovery.PeerLost:
-						log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
+						log.Info().
+							Str("addr", msg.GetAddress()).
+							Str("iface", msg.GetInterface()).
+							Msg("peer lost")
 						err := multiClient.CancelClient(msg.GetAddress())
 						if err != nil {
 							log.Error().Err(err).Msg("failed to remove client")
@@ -121,7 +131,7 @@ var pingCmd = &cobra.Command{
 
 		err := grp.Wait()
 
-		time.Sleep(100 * time.Second)
+		log.Debug().Err(err).Msg("finished ping loop")
 		if err != nil && err.Error() != "context canceled" {
 			log.Error().Err(err).Msg("Error running multiclient")
 			return

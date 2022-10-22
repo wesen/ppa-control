@@ -9,7 +9,8 @@ import (
 )
 
 type InterfaceDiscoverer struct {
-	im                 *InterfaceManager
+	im *InterfaceManager
+	// if not empty, this is a list of the interfaces we will be using, ignoring other interfaces
 	acceptedInterfaces map[InterfaceName]struct{}
 	addedInterfaceCh   chan string
 	removedInterfaceCh chan string

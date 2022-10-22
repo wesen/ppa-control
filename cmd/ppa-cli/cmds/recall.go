@@ -29,12 +29,13 @@ var recallCmd = &cobra.Command{
 		discoveryCh := make(chan discovery.PeerInformation)
 		receivedCh := make(chan client.ReceivedMessage)
 
-		multiClient := client.NewMultiClient()
+		multiClient := client.NewMultiClient("recall")
 		for _, addr := range strings.Split(addresses, ",") {
 			if addr == "" {
 				continue
 			}
-			_, err := multiClient.StartClient(ctx, addr, componentId)
+			// TODO allow passing in the interface name for a client, here
+			_, err := multiClient.AddClient(ctx, addr, "", componentId)
 			if err != nil {
 				log.Fatal().Err(err).Msg("failed to add client")
 			}
@@ -66,8 +67,11 @@ var recallCmd = &cobra.Command{
 					log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
 					switch msg.(type) {
 					case discovery.PeerDiscovered:
-						log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
-						c, err := multiClient.StartClient(ctx, msg.GetAddress(), componentId)
+						log.Info().
+							Str("addr", msg.GetAddress()).
+							Str("iface", msg.GetInterface()).
+							Msg("peer discovered")
+						c, err := multiClient.AddClient(ctx, msg.GetAddress(), msg.GetInterface(), componentId)
 						if err != nil {
 							log.Error().Err(err).Msg("failed to add client")
 							return err
@@ -75,7 +79,10 @@ var recallCmd = &cobra.Command{
 						// immediately send preset recall on discovery
 						c.SendPresetRecallByPresetIndex(preset)
 					case discovery.PeerLost:
-						log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
+						log.Info().
+							Str("addr", msg.GetAddress()).
+							Str("iface", msg.GetInterface()).
+							Msg("peer lost")
 						err := multiClient.CancelClient(msg.GetAddress())
 						if err != nil {
 							log.Error().Err(err).Msg("failed to remove client")

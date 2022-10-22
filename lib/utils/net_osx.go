@@ -1,6 +1,6 @@
 //go:build darwin
 
-package simulation
+package utils
 
 import (
 	"context"
@@ -10,7 +10,9 @@ import (
 	"syscall"
 )
 
-func ListenUDPBroadcast(ctx context.Context, addr string, iface string) (net.PacketConn, error) {
+// ListenUDP opens a net.PacketConn that allows address, port reuse and has the flag set.
+// If iface is not empty, it will bind the socket to the interface.
+func ListenUDP(ctx context.Context, addr string, iface string) (net.PacketConn, error) {
 	lc := &net.ListenConfig{
 		Control: func(network, address string, c syscall.RawConn) error {
 			var e2 error = nil
