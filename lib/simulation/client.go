@@ -239,6 +239,7 @@ func (sd *SimulatedDevice) handlePing(req *Request) error {
 	return nil
 }
 
+// TODO All these responses are wrong
 func (sd *SimulatedDevice) handleLiveCmd(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
@@ -268,6 +269,7 @@ func (sd *SimulatedDevice) handleLiveCmd(req *Request) error {
 	return nil
 }
 
+// TODO All these responses are wrong
 func (sd *SimulatedDevice) handleDeviceData(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
@@ -298,6 +300,7 @@ func (sd *SimulatedDevice) handleDeviceData(req *Request) error {
 
 }
 
+// TODO All these responses are wrong
 func (sd *SimulatedDevice) handlePresetRecall(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
@@ -327,6 +330,7 @@ func (sd *SimulatedDevice) handlePresetRecall(req *Request) error {
 	return nil
 }
 
+// TODO All these responses are wrong
 func (sd *SimulatedDevice) handlePresetSave(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
