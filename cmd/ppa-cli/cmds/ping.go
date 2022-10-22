@@ -5,6 +5,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+	"os"
+	"os/signal"
 	"ppa-control/lib/client"
 	"ppa-control/lib/client/discovery"
 	"strings"
@@ -30,6 +32,14 @@ var pingCmd = &cobra.Command{
 		port, _ := cmd.PersistentFlags().GetUint("port")
 
 		ctx := context.Background()
+
+		// TODO(@manuel) you are supposed to defer the cancelFunc when using a cancellable context
+		ctx, cancelFunc := signal.NotifyContext(ctx, os.Interrupt)
+		defer func() {
+			log.Debug().Msg("Cancelling context")
+			cancelFunc()
+		}()
+
 		grp, ctx := errgroup.WithContext(ctx)
 
 		discoveryCh := make(chan discovery.PeerInformation)
@@ -110,7 +120,9 @@ var pingCmd = &cobra.Command{
 		})
 
 		err := grp.Wait()
-		if err != nil {
+
+		time.Sleep(100 * time.Second)
+		if err != nil && err.Error() != "context canceled" {
 			log.Error().Err(err).Msg("Error running multiclient")
 			return
 		}

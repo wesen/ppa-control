@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+type InterfaceName = string
+
 type InterfaceManager struct {
 	port       uint16
 	receivedCh *chan client.ReceivedMessage
@@ -18,16 +20,16 @@ type InterfaceManager struct {
 
 	// one Client and cancel per interface, protected by mutex
 	mutex   sync.RWMutex
-	clients map[string]client.Client
-	cancels map[string]context.CancelFunc
+	clients map[InterfaceName]client.Client
+	cancels map[InterfaceName]context.CancelFunc
 
 	waiting atomic.Bool
 }
 
 func NewInterfaceManager(port uint16, receivedCh *chan client.ReceivedMessage) *InterfaceManager {
 	return &InterfaceManager{
-		clients:    make(map[string]client.Client),
-		cancels:    make(map[string]context.CancelFunc),
+		clients:    make(map[InterfaceName]client.Client),
+		cancels:    make(map[InterfaceName]context.CancelFunc),
 		receivedCh: receivedCh,
 		port:       port,
 		waiting:    *atomic.NewBool(false),
@@ -46,7 +48,7 @@ func (im *InterfaceManager) SendPing() {
 	}
 }
 
-func (im *InterfaceManager) DoesInterfaceExist(iface string) bool {
+func (im *InterfaceManager) DoesInterfaceExist(iface InterfaceName) bool {
 	im.mutex.RLock()
 	defer func() {
 		log.Trace().Msg("unlocking DoesInterfaceExist mutex")
@@ -59,7 +61,7 @@ func (im *InterfaceManager) DoesInterfaceExist(iface string) bool {
 
 // StartInterfaceClient will create and start a client for the given interface,
 // with target address the broadcast address 255.255.255.255 .
-func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface string) (error, *client.SingleDevice) {
+func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface InterfaceName) (error, *client.SingleDevice) {
 	if im.waiting.Load() {
 		panic("cannot add interface while waiting for clients to be done")
 	}

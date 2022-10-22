@@ -10,25 +10,26 @@ import (
 
 type InterfaceDiscoverer struct {
 	im                 *InterfaceManager
-	acceptedInterfaces map[string]bool
+	acceptedInterfaces map[InterfaceName]struct{}
 	addedInterfaceCh   chan string
 	removedInterfaceCh chan string
 }
 
-func NewInterfaceDiscoverer(im *InterfaceManager, acceptedInterfaces []string) *InterfaceDiscoverer {
-	acceptedInterfacesMap := make(map[string]bool)
+func NewInterfaceDiscoverer(im *InterfaceManager, acceptedInterfaces []InterfaceName) *InterfaceDiscoverer {
+	// TODO(@manuel) - The idiomatic way to do sets is a map of struct{}
+	acceptedInterfacesMap := make(map[InterfaceName]struct{})
 	for _, iface := range acceptedInterfaces {
-		acceptedInterfacesMap[iface] = true
+		acceptedInterfacesMap[iface] = struct{}{}
 	}
 	return &InterfaceDiscoverer{
 		im:                 im,
 		acceptedInterfaces: acceptedInterfacesMap,
-		addedInterfaceCh:   make(chan string),
-		removedInterfaceCh: make(chan string),
+		addedInterfaceCh:   make(chan InterfaceName),
+		removedInterfaceCh: make(chan InterfaceName),
 	}
 }
 
-func (id *InterfaceDiscoverer) updateInterfaces(currentInterfaces []string) (newInterfaces []string, removedInterfaces []string, err error) {
+func (id *InterfaceDiscoverer) updateInterfaces(currentInterfaces []InterfaceName) (newInterfaces []InterfaceName, removedInterfaces []InterfaceName, err error) {
 	validInterfaces, err := utils.GetValidInterfaces()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get interfaces")
@@ -36,15 +37,15 @@ func (id *InterfaceDiscoverer) updateInterfaces(currentInterfaces []string) (new
 	}
 	log.Debug().Msgf("valid interfaces: %v", validInterfaces)
 
-	newInterfaces = make([]string, 0)
-	removedInterfaces = make([]string, 0)
+	newInterfaces = make([]InterfaceName, 0)
+	removedInterfaces = make([]InterfaceName, 0)
 
-	currentInterfacesMap := make(map[string]bool)
+	currentInterfacesMap := make(map[InterfaceName]struct{})
 	for _, iface := range currentInterfaces {
-		currentInterfacesMap[iface] = true
+		currentInterfacesMap[iface] = struct{}{}
 	}
 	// create a hashmap of validInterfaces
-	validInterfacesMap := make(map[string]net.Interface)
+	validInterfacesMap := make(map[InterfaceName]net.Interface)
 	for _, iface := range validInterfaces {
 		validInterfacesMap[iface.Name] = iface
 	}
