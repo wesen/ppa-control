@@ -77,10 +77,13 @@ func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface Inte
 	log.Debug().Str("iface", iface).Str("addr", broadcastAddr).Msg("creating client")
 
 	// now, create a client bound to the interface with the address being 255.255.255.255
-	c := client.NewSingleDevice(broadcastAddr, 0xfe)
+	c := client.NewSingleDevice(broadcastAddr, iface, 0xfe)
 
 	clientCtx, cancel := context.WithCancel(ctx)
-	log.Debug().Str("iface", iface).Str("addr", broadcastAddr).Msg("adding client")
+	log.Debug().
+		Str("iface", iface).
+		Str("addr", broadcastAddr).
+		Msg("adding client")
 	func() {
 		im.mutex.Lock()
 		defer func() {
@@ -92,12 +95,18 @@ func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface Inte
 		im.cancels[iface] = cancel
 	}()
 
-	log.Debug().Str("iface", iface).Msg("starting client")
+	log.Debug().
+		Str("iface", iface).
+		Str("addr", broadcastAddr).
+		Msg("starting client")
 
 	go func() {
 		im.wg.Add(1)
 
-		log.Info().Str("iface", iface).Msg("starting client")
+		log.Info().
+			Str("iface", iface).
+			Str("addr", broadcastAddr).
+			Msg("starting client")
 		err := c.Run(clientCtx, im.receivedCh)
 
 		// remove the client from the hashtables once done

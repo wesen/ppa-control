@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"net"
 	"ppa-control/lib/protocol"
+	"ppa-control/lib/utils"
 	"time"
 )
 
@@ -59,7 +60,7 @@ func NewSimulatedDevice(settings SimulatedDeviceSettings) *SimulatedDevice {
 
 func (sd *SimulatedDevice) Run(ctx context.Context) (err error) {
 	serverString := fmt.Sprintf("%s:%d", sd.Settings.Address, sd.Settings.Port)
-	conn, err := ListenUDPBroadcast(ctx, serverString, sd.Settings.Interface)
+	conn, err := utils.ListenUDP(ctx, serverString, sd.Settings.Interface)
 
 	if err != nil {
 		log.Error().

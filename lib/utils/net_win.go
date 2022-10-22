@@ -1,3 +1,3 @@
 //go:build windows
 
-package simulation
+package utils

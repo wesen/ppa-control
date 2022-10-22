@@ -84,7 +84,7 @@ var rootCmd = &cobra.Command{
 				continue
 			}
 			log.Info().Msgf("adding client %s", addr)
-			_, err := multiClient.AddClient(ctx2, addr, componentId)
+			_, err := multiClient.AddClient(ctx2, addr, "", componentId)
 			if err != nil {
 				log.Fatal().Err(err).Msg("failed to add client")
 			}
@@ -127,9 +127,12 @@ var rootCmd = &cobra.Command{
 					log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
 					switch msg.(type) {
 					case discovery.PeerDiscovered:
-						log.Info().Str("addr", msg.GetAddress()).Msg("peer discovered")
+						log.Info().
+							Str("addr", msg.GetAddress()).
+							Str("iface", msg.GetInterface()).
+							Msg("peer discovered")
 						ui_.Log("Peer discovered: " + msg.GetAddress())
-						c, err := multiClient.AddClient(ctx, msg.GetAddress(), componentId)
+						c, err := multiClient.AddClient(ctx, msg.GetAddress(), msg.GetInterface(), componentId)
 						if err != nil {
 							log.Error().Err(err).Msg("failed to add client")
 							return err
@@ -137,7 +140,10 @@ var rootCmd = &cobra.Command{
 						// send immediate ping
 						c.SendPing()
 					case discovery.PeerLost:
-						log.Info().Str("addr", msg.GetAddress()).Msg("peer lost")
+						log.Info().
+							Str("addr", msg.GetAddress()).
+							Str("iface", msg.GetInterface()).
+							Msg("peer lost")
 						ui_.Log("Peer lost: " + msg.GetAddress())
 						err := multiClient.CancelClient(msg.GetAddress())
 						if err != nil {

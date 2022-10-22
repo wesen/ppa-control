@@ -10,16 +10,26 @@ import (
 
 type PeerInformation interface {
 	GetAddress() string
+	GetInterface() string
 }
 
 type PeerDiscovered struct {
-	addr string
+	addr  string
+	iface string
 }
 
 type PeerLost struct {
-	addr string
+	addr  string
+	iface string
 }
 
+func (c PeerDiscovered) GetInterface() string {
+	return c.iface
+}
+
+func (c PeerLost) GetInterface() string {
+	return c.iface
+}
 func (c PeerDiscovered) GetAddress() string {
 	return c.addr
 }
@@ -93,6 +103,7 @@ func Discover(
 				if msg.Header != nil {
 					log.Info().Str("from", msg.RemoteAddress.String()).
 						Str("client", msg.Client.Name()).
+						Str("iface", msg.Interface).
 						Str("type", msg.Header.MessageType.String()).
 						Str("status", msg.Header.Status.String()).
 						Msg("received message")
@@ -100,9 +111,15 @@ func Discover(
 					_, peerFound := peerLastSeen[msg.RemoteAddress.String()]
 					peerLastSeen[msg.RemoteAddress.String()] = time.Now()
 					if !peerFound {
-						log.Info().Str("addr", msg.RemoteAddress.String()).Msg("new peer discovered")
+						log.Info().
+							Str("addr", msg.RemoteAddress.String()).
+							Str("iface", msg.Interface).
+							Msg("new peer discovered")
 						select {
-						case msgCh <- PeerDiscovered{msg.RemoteAddress.String()}:
+						case msgCh <- PeerDiscovered{
+							msg.RemoteAddress.String(),
+							msg.Interface,
+						}:
 						case <-ctx.Done():
 							return ctx.Err()
 						}
