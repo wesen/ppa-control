@@ -10,6 +10,7 @@ build/ppa-cli.x86_64.macos: build
 	GOOS=darwin GOARCH=amd64 go build -o $@ ./cmd/ppa-cli
 
 build/ppa-control.app: build
+	rm -rf build/ppa-control.app
 	cd cmd/ui-test \
        && MACOSX_DEPLOYMENT_TARGET=10.11 \
           GOARCH=amd64 \
