@@ -95,11 +95,6 @@ func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface Inte
 		im.cancels[iface] = cancel
 	}()
 
-	log.Debug().
-		Str("iface", iface).
-		Str("addr", broadcastAddr).
-		Msg("starting client")
-
 	go func() {
 		im.wg.Add(1)
 

@@ -46,7 +46,7 @@ var pingCmd = &cobra.Command{
 		discoveryCh := make(chan discovery.PeerInformation)
 		receivedCh := make(chan client.ReceivedMessage)
 
-		multiClient := client.NewMultiClient()
+		multiClient := client.NewMultiClient("ping")
 		for _, addr := range strings.Split(addresses, ",") {
 			if addr == "" {
 				continue

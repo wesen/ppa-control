@@ -112,7 +112,14 @@ func (sd *SimulatedDevice) Run(ctx context.Context) (err error) {
 
 			if n > 0 {
 
-				switch protocol.MessageType(buffer[0]) {
+				messageType := protocol.MessageType(buffer[0])
+				log.Debug().
+					Str("messageType", messageType.String()).
+					Str("from", srcAddr.String()).
+					Str("local", conn.LocalAddr().String()).
+					Msg("Received message")
+
+				switch messageType {
 				case protocol.MessageTypePing:
 					{
 						err := sd.handlePing(request)
@@ -294,12 +301,12 @@ func (sd *SimulatedDevice) handleDeviceData(req *Request) error {
 func (sd *SimulatedDevice) handlePresetRecall(req *Request) error {
 	hdr, err := protocol.ParseHeader(req.Buffer.Bytes())
 	if err != nil {
-		log.Error().Str("error", err.Error()).Msg("Could not parse ping header")
+		log.Error().Str("error", err.Error()).Msg("Could not parse recall header")
 		return err
 	}
 
 	response := protocol.NewBasicHeader(
-		protocol.MessageTypePing,
+		protocol.MessageTypePresetRecall,
 		protocol.StatusResponseServer,
 		sd.Settings.UniqueId,
 		hdr.SequenceNumber,

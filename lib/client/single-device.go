@@ -80,7 +80,11 @@ func (c *SingleDevice) SendPing() {
 		log.Warn().Str("error", err.Error()).Msg("Failed to encode header")
 		return
 	}
-	log.Debug().Str("address", c.AddrPort).Msg("Sending ping to SendChannel")
+	log.Debug().
+		Str("address", c.AddrPort).
+		Str("interface", c.Interface).
+		Int("length", buf.Len()).
+		Msg("Sending ping to SendChannel")
 	c.SendChannel <- buf
 }
 
@@ -107,7 +111,11 @@ func (c *SingleDevice) SendPresetRecallByPresetIndex(index int) {
 		log.Warn().Str("error", err.Error()).Msg("Failed to encode preset recall")
 		return
 	}
-	log.Debug().Str("address", c.AddrPort).Msg("Sending preset recall")
+	log.Debug().
+		Str("address", c.AddrPort).
+		Str("interface", c.Interface).
+		Int("length", buf.Len()).
+		Msg("Sending preset recall")
 	c.SendChannel <- buf
 }
 
@@ -153,7 +161,9 @@ func (c *SingleDevice) sendLoop(ctx context.Context, conn net.PacketConn, raddr 
 
 		case buf := <-c.SendChannel:
 			go func() {
-				log.Debug().Str("address", c.AddrPort).Int("len", buf.Len()).Msg("Sending packet")
+				log.Debug().Str("address", c.AddrPort).
+					Int("len", buf.Len()).
+					Msg("Sending packet")
 				deadline := time.Now().Add(Timeout)
 				err := conn.SetWriteDeadline(deadline)
 				if err != nil {
@@ -238,6 +248,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn net.PacketConn, receiv
 		}
 		log.Info().Int("received", nRead).
 			Str("from", addr.String()).
+			Str("iface", c.Interface).
 			Str("local", conn.LocalAddr().String()).
 			Bytes("data", buffer[:nRead]).
 			Msg("Received packet")
@@ -268,6 +279,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn net.PacketConn, receiv
 			*receivedCh <- ReceivedMessage{
 				Header:        hdr,
 				RemoteAddress: addr,
+				Interface:     c.Interface,
 				Client:        c,
 				Body:          nil,
 				Data:          buffer[:nRead],

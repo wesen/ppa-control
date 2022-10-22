@@ -78,7 +78,7 @@ var rootCmd = &cobra.Command{
 		port, _ := cmd.Flags().GetUint("port")
 		interfaces, _ := cmd.Flags().GetStringArray("interfaces")
 
-		multiClient := client.NewMultiClient()
+		multiClient := client.NewMultiClient("ui")
 		for _, addr := range strings.Split(addresses, ",") {
 			if addr == "" {
 				continue
