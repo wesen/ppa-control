@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/natefinch/lumberjack.v2"
+	"io"
 	"os"
 	"os/signal"
 	"ppa-control/cmd/ui-test/ui"
@@ -44,18 +45,28 @@ var rootCmd = &cobra.Command{
 		logger.InitializeLogger(withCaller)
 		logFormat, _ := cmd.Flags().GetString("log-format")
 		// default is json
+		var logWriter io.Writer
 		if logFormat == "text" {
-			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-		} else if logFormat == "file" {
-			// TODO(manuel, 2022-12-11) Use the OS specific path for logging here (look at configdir for inspiration)
-			log.Logger = log.Output(&lumberjack.Logger{
-				Filename:   "/tmp/ppa-control.log",
-				MaxSize:    500, // megabytes
-				MaxBackups: 3,
-				MaxAge:     28,   //days
-				Compress:   true, // disabled by default
-			})
+			logWriter = zerolog.ConsoleWriter{Out: os.Stderr}
+		} else {
+			logWriter = os.Stderr
 		}
+
+		// TODO(manuel, 2022-12-11) Use the OS specific path for logging here (look at configdir for inspiration)
+		logWriter = io.MultiWriter(
+			logWriter,
+			zerolog.ConsoleWriter{
+				NoColor: true,
+				Out: &lumberjack.Logger{
+					Filename:   "/tmp/ppa-control.log",
+					MaxSize:    10, // megabytes
+					MaxBackups: 3,
+					MaxAge:     28,    //days
+					Compress:   false, // disabled by default
+				},
+			})
+
+		log.Logger = log.Output(logWriter)
 
 		level, _ := cmd.Flags().GetString("log-level")
 		switch level {
@@ -103,14 +114,17 @@ var rootCmd = &cobra.Command{
 		interfaces, _ := cmd.Flags().GetStringArray("interfaces")
 
 		// handle config file
-		configDirs := configdir.New("vendor-name", "application-name")
+		configDirs := configdir.New("Hoffmann Audio", "ppa-control")
 		folder := configDirs.QueryFolderContainsFile("config.json")
 		if folder != nil {
+			log.Info().Str("path", folder.Path).Msg("Found config file")
 			data, _ := folder.ReadFile("config.json")
 			err := json.Unmarshal(data, &config)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to unmarshal config")
 			}
+		} else {
+			log.Info().Msg("No config file found")
 		}
 
 		if len(addresses) == 0 {
@@ -131,11 +145,12 @@ var rootCmd = &cobra.Command{
 			config.ComponentId = componentId
 			config.Interfaces = interfaces
 
-			data, err := json.Marshal(config)
+			data, err := json.MarshalIndent(config, "", "  ")
 			if err != nil {
 				log.Error().Err(err).Msg("failed to marshal config")
 			} else {
 				folders := configDirs.QueryFolders(configdir.Global)
+				log.Info().Str("path", folders[0].Path).Msg("Writing config file")
 				err = folders[0].WriteFile("config.json", data)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to save config")
