@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path"
 	"ppa-control/cmd/ui-test/ui"
 	"ppa-control/lib/client"
 	"ppa-control/lib/client/discovery"
@@ -52,19 +53,28 @@ var rootCmd = &cobra.Command{
 			logWriter = os.Stderr
 		}
 
-		// TODO(manuel, 2022-12-11) Use the OS specific path for logging here (look at configdir for inspiration)
-		logWriter = io.MultiWriter(
-			logWriter,
-			zerolog.ConsoleWriter{
-				NoColor: true,
-				Out: &lumberjack.Logger{
-					Filename:   "/tmp/ppa-control.log",
-					MaxSize:    10, // megabytes
-					MaxBackups: 3,
-					MaxAge:     28,    //days
-					Compress:   false, // disabled by default
-				},
-			})
+		configDirs := configdir.New("Hoffmann Audio", "ppa-control")
+		cacheFolder := configDirs.QueryCacheFolder()
+		logsDir := path.Join(cacheFolder.Path, "logs")
+		log.Info().Msgf("Writing logs to %s", logsDir)
+		// ensure logs dir exists
+		err := os.MkdirAll(logsDir, 0755)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create logs dir")
+		} else {
+			logWriter = io.MultiWriter(
+				logWriter,
+				zerolog.ConsoleWriter{
+					NoColor: true,
+					Out: &lumberjack.Logger{
+						Filename:   path.Join(logsDir, "ppa-control.log"),
+						MaxSize:    10, // megabytes
+						MaxBackups: 3,
+						MaxAge:     28,    //days
+						Compress:   false, // disabled by default
+					},
+				})
+		}
 
 		log.Logger = log.Output(logWriter)
 
@@ -115,7 +125,9 @@ var rootCmd = &cobra.Command{
 
 		// handle config file
 		configDirs := configdir.New("Hoffmann Audio", "ppa-control")
+		queryFolders := configDirs.QueryFolders(configdir.Global)
 		folder := configDirs.QueryFolderContainsFile("config.json")
+
 		if folder != nil {
 			log.Info().Str("path", folder.Path).Msg("Found config file")
 			data, _ := folder.ReadFile("config.json")
@@ -149,9 +161,8 @@ var rootCmd = &cobra.Command{
 			if err != nil {
 				log.Error().Err(err).Msg("failed to marshal config")
 			} else {
-				folders := configDirs.QueryFolders(configdir.Global)
-				log.Info().Str("path", folders[0].Path).Msg("Writing config file")
-				err = folders[0].WriteFile("config.json", data)
+				log.Info().Str("path", queryFolders[0].Path).Msg("Writing config file")
+				err = queryFolders[0].WriteFile("config.json", data)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to save config")
 				}
