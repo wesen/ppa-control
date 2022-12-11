@@ -12,23 +12,30 @@ func _() {
 	_ = x[MessageTypeLiveCmd-1]
 	_ = x[MessageTypeDeviceData-2]
 	_ = x[MessageTypePresetRecall-4]
+	_ = x[MessageTypePresetSave-5]
+	_ = x[MessageTypeUnknown-255]
 }
 
 const (
 	_MessageType_name_0 = "MessageTypePingMessageTypeLiveCmdMessageTypeDeviceData"
-	_MessageType_name_1 = "MessageTypePresetRecall"
+	_MessageType_name_1 = "MessageTypePresetRecallMessageTypePresetSave"
+	_MessageType_name_2 = "MessageTypeUnknown"
 )
 
 var (
 	_MessageType_index_0 = [...]uint8{0, 15, 33, 54}
+	_MessageType_index_1 = [...]uint8{0, 23, 44}
 )
 
 func (i MessageType) String() string {
 	switch {
 	case i <= 2:
 		return _MessageType_name_0[_MessageType_index_0[i]:_MessageType_index_0[i+1]]
-	case i == 4:
-		return _MessageType_name_1
+	case 4 <= i && i <= 5:
+		i -= 4
+		return _MessageType_name_1[_MessageType_index_1[i]:_MessageType_index_1[i+1]]
+	case i == 255:
+		return _MessageType_name_2
 	default:
 		return "MessageType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}

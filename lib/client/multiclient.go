@@ -87,8 +87,8 @@ func (mc *MultiClient) AddClient(ctx context.Context, addrPort string, iface str
 		mc.cancels[addrPort] = cancel
 	}()
 
+	mc.wg.Add(1)
 	go func() {
-		mc.wg.Add(1)
 
 		log.Info().
 			Str("name", mc.name).

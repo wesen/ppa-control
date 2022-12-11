@@ -43,7 +43,6 @@ type SimulatedDevice struct {
 	SendChannel           chan Response
 	ReceiveChannel        chan *bytes.Buffer
 	Settings              SimulatedDeviceSettings
-	presets               []Preset
 	currentlyActivePreset int
 	currentVolume         float32
 }

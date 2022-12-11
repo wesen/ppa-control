@@ -133,7 +133,7 @@ func EncodeHeader(w io.Writer, h *BasicHeader) error {
 
 const (
 	RecallByPresetIndex    uint8 = 0
-	RecallByPresetPosition       = 2
+	RecallByPresetPosition uint8 = 2
 )
 
 type PresetRecall struct {

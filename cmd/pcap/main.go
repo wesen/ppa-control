@@ -15,7 +15,6 @@ import (
 var (
 	printPackets = flag.String("print-packets", "deviceData,liveCmd,unknown,ping,presetRecall", "Print packets, comma-separated list of deviceData,ping,liveCmd,presetRecall,unknown")
 	printHexdump = flag.Bool("print-hexdump", false, "Print hexdump")
-	printPayload = flag.Bool("print-payload", false, "Print payload")
 )
 
 func main() {

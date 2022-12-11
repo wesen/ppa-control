@@ -29,8 +29,6 @@ var rootCmd = &cobra.Command{
 		logFormat, _ := cmd.Flags().GetString("log-format")
 		if logFormat == "text" {
 			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-		} else {
-			// json is the default
 		}
 
 		level, _ := cmd.Flags().GetString("log-level")
@@ -99,7 +97,7 @@ var rootCmd = &cobra.Command{
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
 		ui_ := ui.BuildUI(multiClient, cancel)
-		ui_.Log("Startup")
+		ui_.Log("ppa-control started, waiting for devices...")
 
 		grp.Go(func() error {
 			return multiClient.Run(ctx2, &receivedCh)

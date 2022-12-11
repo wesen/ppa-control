@@ -10,7 +10,7 @@ import (
 	"syscall"
 )
 
-func ListenUDPBroadcast(ctx context.Context, addr string, iface string) (net.PacketConn, error) {
+func ListenUDP(ctx context.Context, addr string, iface string) (net.PacketConn, error) {
 	lc := &net.ListenConfig{
 		Control: func(network, address string, c syscall.RawConn) error {
 			var e2 error = nil
