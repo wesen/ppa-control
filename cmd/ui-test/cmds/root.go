@@ -2,11 +2,14 @@ package cmds
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/shibukawa/configdir"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"os/signal"
 	"ppa-control/cmd/ui-test/ui"
@@ -18,6 +21,20 @@ import (
 	"time"
 )
 
+const DEFAULT_COMPONENT_ID = 0xFF
+
+type Config struct {
+	Addresses   []string
+	Interfaces  []string
+	ComponentId uint
+}
+
+var config Config = Config{
+	Addresses:   []string{},
+	Interfaces:  []string{},
+	ComponentId: DEFAULT_COMPONENT_ID,
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "ui",
 	Short: "main ppa-control UI",
@@ -25,10 +42,19 @@ var rootCmd = &cobra.Command{
 		withCaller, _ := cmd.Flags().GetBool("with-caller")
 		fmt.Println("withCaller", withCaller)
 		logger.InitializeLogger(withCaller)
-
 		logFormat, _ := cmd.Flags().GetString("log-format")
+		// default is json
 		if logFormat == "text" {
 			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		} else if logFormat == "file" {
+			// TODO(manuel, 2022-12-11) Use the OS specific path for logging here (look at configdir for inspiration)
+			log.Logger = log.Output(&lumberjack.Logger{
+				Filename:   "/tmp/ppa-control.log",
+				MaxSize:    500, // megabytes
+				MaxBackups: 3,
+				MaxAge:     28,   //days
+				Compress:   true, // disabled by default
+			})
 		}
 
 		level, _ := cmd.Flags().GetString("log-level")
@@ -76,8 +102,49 @@ var rootCmd = &cobra.Command{
 		port, _ := cmd.Flags().GetUint("port")
 		interfaces, _ := cmd.Flags().GetStringArray("interfaces")
 
+		// handle config file
+		configDirs := configdir.New("vendor-name", "application-name")
+		folder := configDirs.QueryFolderContainsFile("config.json")
+		if folder != nil {
+			data, _ := folder.ReadFile("config.json")
+			err := json.Unmarshal(data, &config)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to unmarshal config")
+			}
+		}
+
+		if len(addresses) == 0 {
+			addresses = strings.Join(config.Addresses, ",")
+		}
+		if componentId == DEFAULT_COMPONENT_ID {
+			componentId = config.ComponentId
+		}
+		if len(interfaces) == 0 {
+			interfaces = config.Interfaces
+		}
+
+		splitAddresses := strings.Split(addresses, ",")
+
+		saveConfig, _ := cmd.Flags().GetBool("save-config")
+		if saveConfig {
+			config.Addresses = splitAddresses
+			config.ComponentId = componentId
+			config.Interfaces = interfaces
+
+			data, err := json.Marshal(config)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to marshal config")
+			} else {
+				folders := configDirs.QueryFolders(configdir.Global)
+				err = folders[0].WriteFile("config.json", data)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to save config")
+				}
+			}
+		}
+
 		multiClient := client.NewMultiClient("ui")
-		for _, addr := range strings.Split(addresses, ",") {
+		for _, addr := range splitAddresses {
 			if addr == "" {
 				continue
 			}
@@ -195,8 +262,10 @@ func init() {
 	rootCmd.PersistentFlags().StringArray("interfaces", []string{}, "Interfaces to use for discovery")
 
 	rootCmd.PersistentFlags().UintP(
-		"componentId", "c", 0xFF,
+		"componentId", "c", DEFAULT_COMPONENT_ID,
 		"Component ID to use for devices")
 
 	rootCmd.PersistentFlags().UintP("port", "p", 5001, "Port to ping on")
+
+	rootCmd.Flags().Bool("save-config", false, "Save config to file")
 }
