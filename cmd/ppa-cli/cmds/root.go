@@ -22,8 +22,6 @@ var rootCmd = &cobra.Command{
 		logFormat, _ := cmd.Flags().GetString("log-format")
 		if logFormat == "text" {
 			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-		} else {
-			// json is the default
 		}
 
 		level, _ := cmd.Flags().GetString("log-level")

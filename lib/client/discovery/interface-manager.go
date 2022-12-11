@@ -95,8 +95,8 @@ func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface Inte
 		im.cancels[iface] = cancel
 	}()
 
+	im.wg.Add(1)
 	go func() {
-		im.wg.Add(1)
 
 		log.Info().
 			Str("iface", iface).

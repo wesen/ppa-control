@@ -33,7 +33,7 @@ build/ppa-control.exe: build
        && mv ppa-control.exe ../../build
 
 lint:
-	docker run --rm -v $(shell pwd):/app -w /app golangci/golangci-lint:v1.50.1 golangci-lint run -v
+	golangci-lint run -v
 
 test:
 	go test ./...

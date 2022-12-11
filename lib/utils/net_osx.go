@@ -46,11 +46,8 @@ func ListenUDP(ctx context.Context, addr string, iface string) (net.PacketConn, 
 				}
 
 				if iface != "" {
-					err, done := bindFdToInterface(fd, e2, iface)
+					err, _ := bindFdToInterface(fd, iface)
 					e2 = err
-					if done {
-						return
-					}
 				}
 
 			})
@@ -73,10 +70,9 @@ func ListenUDP(ctx context.Context, addr string, iface string) (net.PacketConn, 
 	return c, nil
 }
 
-func bindFdToInterface(fd uintptr, e2 error, iface string) (error, bool) {
+func bindFdToInterface(fd uintptr, iface string) (error, bool) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		e2 = err
 		return nil, true
 	}
 	ifaceIdx := -1
@@ -87,12 +83,12 @@ func bindFdToInterface(fd uintptr, e2 error, iface string) (error, bool) {
 		}
 	}
 	if ifaceIdx == -1 {
-		e2 = errors.Errorf("interface %s not found", iface)
+		//e2 = errors.Errorf("interface %s not found", iface)
 		return nil, true
 	}
 
 	log.Debug().Str("interface", iface).Int("ifaceIdx", ifaceIdx).Msg("Binding to interface")
-	e2 = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_BOUND_IF, ifaceIdx)
+	e2 := syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_BOUND_IF, ifaceIdx)
 	if e2 != nil {
 		log.Error().
 			Err(e2).
