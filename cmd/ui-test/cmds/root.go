@@ -2,13 +2,18 @@ package cmds
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/shibukawa/configdir"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/natefinch/lumberjack.v2"
+	"io"
 	"os"
 	"os/signal"
+	"path"
 	"ppa-control/cmd/ui-test/ui"
 	"ppa-control/lib/client"
 	"ppa-control/lib/client/discovery"
@@ -18,6 +23,20 @@ import (
 	"time"
 )
 
+const DEFAULT_COMPONENT_ID = 0xFF
+
+type Config struct {
+	Addresses   []string
+	Interfaces  []string
+	ComponentId uint
+}
+
+var config Config = Config{
+	Addresses:   []string{},
+	Interfaces:  []string{},
+	ComponentId: DEFAULT_COMPONENT_ID,
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "ui",
 	Short: "main ppa-control UI",
@@ -25,11 +44,39 @@ var rootCmd = &cobra.Command{
 		withCaller, _ := cmd.Flags().GetBool("with-caller")
 		fmt.Println("withCaller", withCaller)
 		logger.InitializeLogger(withCaller)
-
 		logFormat, _ := cmd.Flags().GetString("log-format")
+		// default is json
+		var logWriter io.Writer
 		if logFormat == "text" {
-			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+			logWriter = zerolog.ConsoleWriter{Out: os.Stderr}
+		} else {
+			logWriter = os.Stderr
 		}
+
+		configDirs := configdir.New("Hoffmann Audio", "ppa-control")
+		cacheFolder := configDirs.QueryCacheFolder()
+		logsDir := path.Join(cacheFolder.Path, "logs")
+		log.Info().Msgf("Writing logs to %s", logsDir)
+		// ensure logs dir exists
+		err := os.MkdirAll(logsDir, 0755)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create logs dir")
+		} else {
+			logWriter = io.MultiWriter(
+				logWriter,
+				zerolog.ConsoleWriter{
+					NoColor: true,
+					Out: &lumberjack.Logger{
+						Filename:   path.Join(logsDir, "ppa-control.log"),
+						MaxSize:    10, // megabytes
+						MaxBackups: 3,
+						MaxAge:     28,    //days
+						Compress:   false, // disabled by default
+					},
+				})
+		}
+
+		log.Logger = log.Output(logWriter)
 
 		level, _ := cmd.Flags().GetString("log-level")
 		switch level {
@@ -76,8 +123,54 @@ var rootCmd = &cobra.Command{
 		port, _ := cmd.Flags().GetUint("port")
 		interfaces, _ := cmd.Flags().GetStringArray("interfaces")
 
+		// handle config file
+		configDirs := configdir.New("Hoffmann Audio", "ppa-control")
+		queryFolders := configDirs.QueryFolders(configdir.Global)
+		folder := configDirs.QueryFolderContainsFile("config.json")
+
+		if folder != nil {
+			log.Info().Str("path", folder.Path).Msg("Found config file")
+			data, _ := folder.ReadFile("config.json")
+			err := json.Unmarshal(data, &config)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to unmarshal config")
+			}
+		} else {
+			log.Info().Msg("No config file found")
+		}
+
+		if len(addresses) == 0 {
+			addresses = strings.Join(config.Addresses, ",")
+		}
+		if componentId == DEFAULT_COMPONENT_ID {
+			componentId = config.ComponentId
+		}
+		if len(interfaces) == 0 {
+			interfaces = config.Interfaces
+		}
+
+		splitAddresses := strings.Split(addresses, ",")
+
+		saveConfig, _ := cmd.Flags().GetBool("save-config")
+		if saveConfig {
+			config.Addresses = splitAddresses
+			config.ComponentId = componentId
+			config.Interfaces = interfaces
+
+			data, err := json.MarshalIndent(config, "", "  ")
+			if err != nil {
+				log.Error().Err(err).Msg("failed to marshal config")
+			} else {
+				log.Info().Str("path", queryFolders[0].Path).Msg("Writing config file")
+				err = queryFolders[0].WriteFile("config.json", data)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to save config")
+				}
+			}
+		}
+
 		multiClient := client.NewMultiClient("ui")
-		for _, addr := range strings.Split(addresses, ",") {
+		for _, addr := range splitAddresses {
 			if addr == "" {
 				continue
 			}
@@ -195,8 +288,10 @@ func init() {
 	rootCmd.PersistentFlags().StringArray("interfaces", []string{}, "Interfaces to use for discovery")
 
 	rootCmd.PersistentFlags().UintP(
-		"componentId", "c", 0xFF,
+		"componentId", "c", DEFAULT_COMPONENT_ID,
 		"Component ID to use for devices")
 
 	rootCmd.PersistentFlags().UintP("port", "p", 5001, "Port to ping on")
+
+	rootCmd.Flags().Bool("save-config", false, "Save config to file")
 }
