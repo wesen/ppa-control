@@ -16,6 +16,7 @@ import (
 type UI struct {
 	window  fyne.Window
 	console binding.String
+	app     fyne.App
 }
 
 func (ui *UI) Log(line string) {
@@ -36,6 +37,7 @@ func (ui *UI) Run() {
 func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
 	a := app.New()
 	ui := &UI{
+		app:     a,
 		window:  a.NewWindow("PPA Control"),
 		console: binding.NewString(),
 	}
@@ -48,6 +50,13 @@ func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
 	//clientConsole := canvas.NewText("Hello There", color.White)
 	//clientScrollContainer := container.NewVScroll(clientConsole)
 	//clientScrollContainer.SetMinSize(fyne.NewSize(600, 150))
+
+	openSettingsButton := widget.NewButton("Open SettingsUI", func() {
+		settingsPopup := ui.BuildSettingsUI()
+		settingsPopup.Show()
+	})
+
+	settingsButtonContainer := container.NewHBox(openSettingsButton)
 
 	presetCount := 16
 	var presetButtons = make([]fyne.CanvasObject, presetCount)
@@ -92,6 +101,8 @@ func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
 
 	mainGridContainer := container.NewVBox(
 		presetButtonContainer,
+		widget.NewSeparator(),
+		settingsButtonContainer,
 		//widget.NewSeparator(),
 		//clientScrollContainer,
 		widget.NewSeparator(),
