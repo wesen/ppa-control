@@ -16,7 +16,6 @@ type UI struct {
 	window  fyne.Window
 	console binding.String
 	fyneApp fyne.App
-	app     *App
 }
 
 func (ui *UI) Log(line string) {
@@ -39,12 +38,11 @@ func (ui *UI) Close() {
 }
 
 // TODO(manuel, 2023-01-06) this whole UI struct containing the app containing the UI is not great
-func BuildUI(ppa_app *App, cancel context.CancelFunc) *UI {
-	a := app.New()
+func (a *App) BuildUI(cancel context.CancelFunc) *UI {
+	fyneApp := app.New()
 	ui := &UI{
-		fyneApp: a,
-		app:     ppa_app,
-		window:  a.NewWindow("PPA Control"),
+		fyneApp: fyneApp,
+		window:  fyneApp.NewWindow("PPA Control"),
 		console: binding.NewString(),
 	}
 	_ = ui.console.Set("")
@@ -58,7 +56,7 @@ func BuildUI(ppa_app *App, cancel context.CancelFunc) *UI {
 	//clientScrollContainer.SetMinSize(fyne.NewSize(600, 150))
 
 	openSettingsButton := widget.NewButton("Open SettingsUI", func() {
-		settingsPopup := ui.BuildSettingsUI()
+		settingsPopup := a.BuildSettingsUI()
 		settingsPopup.Show()
 	})
 
@@ -70,7 +68,7 @@ func BuildUI(ppa_app *App, cancel context.CancelFunc) *UI {
 		j := i
 		presetButtons[i] = widget.NewButton(fmt.Sprintf("Preset %d", i+1),
 			func() {
-				ppa_app.MultiClient.SendPresetRecallByPresetIndex(j)
+				a.MultiClient.SendPresetRecallByPresetIndex(j)
 				log.Info().Msg(fmt.Sprintf("Preset %d clicked", j+1))
 			})
 	}
@@ -103,7 +101,7 @@ func BuildUI(ppa_app *App, cancel context.CancelFunc) *UI {
 	//
 	// we also need title fields
 	// 4 buttons for the fixed volumes
-	// a side bar and the volume
+	// fyneApp side bar and the volume
 
 	mainGridContainer := container.NewVBox(
 		presetButtonContainer,
@@ -138,7 +136,7 @@ func BuildUI(ppa_app *App, cancel context.CancelFunc) *UI {
 	//	widget.NewSeparator(),
 	//	//sliderContainer,
 	//)
-	ui.window.SetContent(mainGridContainer) // This is a text entry field
+	ui.window.SetContent(mainGridContainer) // This is fyneApp text entry field
 	//ui.window.Resize(fyne.NewSize(800, 800))
 
 	ui.window.SetOnClosed(func() {
@@ -147,5 +145,6 @@ func BuildUI(ppa_app *App, cancel context.CancelFunc) *UI {
 		log.Info().Msg("After cancel")
 	})
 
+	a.ui = ui
 	return ui
 }

@@ -25,6 +25,7 @@ type App struct {
 	Config      *AppConfig
 	LogsDir     string
 	MultiClient *client.MultiClient
+	ui          *UI
 }
 
 func (a *App) InitLogger() error {
@@ -179,7 +180,7 @@ func (a *App) Run() {
 
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
-	ui_ := BuildUI(a, cancel)
+	ui_ := a.BuildUI(cancel)
 	ui_.Log("ppa-control started, waiting for devices...")
 
 	grp.Go(func() error {

@@ -17,7 +17,7 @@ type SettingsUI struct {
 	progressBar  *widget.ProgressBar
 	label        *widget.Label
 	popup        *widget.PopUp
-	ui           *UI
+	app          *App
 	uploadCancel func()
 }
 
@@ -50,7 +50,7 @@ func (s *SettingsUI) handleUpload() {
 		})
 
 		errGroup.Go(func() error {
-			return s.ui.app.UploadLogs(ctx2, progressChannel)
+			return s.app.UploadLogs(ctx2, progressChannel)
 		})
 
 		err := errGroup.Wait()
@@ -84,9 +84,9 @@ func (s *SettingsUI) Show() {
 	s.popup.Show()
 }
 
-func (ui *UI) BuildSettingsUI() *SettingsUI {
+func (a *App) BuildSettingsUI() *SettingsUI {
 	settings := &SettingsUI{
-		ui: ui,
+		app: a,
 	}
 	// create the progress bar
 	settings.progressBar = widget.NewProgressBar()
@@ -116,7 +116,7 @@ func (ui *UI) BuildSettingsUI() *SettingsUI {
 
 	// add the button and progress bar to the window
 	settingsLayout := container.NewVBox(buttonLayout, settings.label, settings.progressBar)
-	settings.popup = widget.NewModalPopUp(settingsLayout, ui.window.Canvas())
+	settings.popup = widget.NewModalPopUp(settingsLayout, a.ui.window.Canvas())
 
 	return settings
 }
