@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"encoding/json"
@@ -10,10 +10,12 @@ import (
 	"path"
 )
 
+const DEFAULT_COMPONENT_ID = 0xFF
+
 type AppConfigFolders struct {
 	configDirs   configdir.ConfigDir
 	queryFolders []*configdir.Config
-	configFile   string
+	ConfigFile   string
 }
 
 func CreateAppConfigFolders() *AppConfigFolders {
@@ -22,7 +24,7 @@ func CreateAppConfigFolders() *AppConfigFolders {
 	acf.queryFolders = acf.configDirs.QueryFolders(configdir.Global)
 	queryFolder := acf.configDirs.QueryFolderContainsFile("config.json")
 	if queryFolder != nil {
-		acf.configFile = path.Join(queryFolder.Path, "config.json")
+		acf.ConfigFile = path.Join(queryFolder.Path, "config.json")
 	}
 
 	return acf
@@ -39,13 +41,13 @@ type AppConfig struct {
 	Port        uint     `json:"port"`
 	Interfaces  []string `json:"interfaces"`
 
-	saveConfig bool
+	SaveConfig bool `json:"-"`
 
 	LogUploadAPI    string `json:"logUploadAPI"`
 	LogUploadBucket string `json:"logUploadBucket"`
 	LogUploadRegion string `json:"logUploadRegion"`
 
-	configFolders *AppConfigFolders
+	ConfigFolders *AppConfigFolders `json:"-"`
 }
 
 func NewAppConfig() *AppConfig {
@@ -66,9 +68,9 @@ func NewAppConfig() *AppConfig {
 }
 
 func NewAppConfigFromFile(acf *AppConfigFolders) (*AppConfig, error) {
-	if acf.configFile != "" {
-		log.Info().Str("path", acf.configFile).Msg("Found config file")
-		f, err := os.Open(acf.configFile)
+	if acf.ConfigFile != "" {
+		log.Info().Str("path", acf.ConfigFile).Msg("Found config file")
+		f, err := os.Open(acf.ConfigFile)
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +122,7 @@ func AddAppConfigFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("bucket", defaultConfig.LogUploadBucket, "S3 bucket to upload to")
 	cmd.PersistentFlags().String("region", defaultConfig.LogUploadRegion, "Region of the S3 bucket")
 
-	cmd.Flags().Bool("save-config", defaultConfig.saveConfig, "Save config to file")
+	cmd.Flags().Bool("save-config", defaultConfig.SaveConfig, "Save config to file")
 }
 
 func CreateDefaultAppConfig() *AppConfig {
@@ -132,7 +134,7 @@ func CreateDefaultAppConfig() *AppConfig {
 	if defaultConfig == nil {
 		defaultConfig = NewAppConfig()
 	}
-	defaultConfig.configFolders = acf
+	defaultConfig.ConfigFolders = acf
 	return defaultConfig
 }
 
@@ -175,7 +177,7 @@ func NewAppConfigFromCommand(cmd *cobra.Command) *AppConfig {
 	config.Discover = discover
 	config.Port = port
 	config.Interfaces = interfaces
-	config.saveConfig = saveConfig
+	config.SaveConfig = saveConfig
 
 	return config
 }

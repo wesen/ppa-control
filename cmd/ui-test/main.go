@@ -8,24 +8,23 @@ import (
 	bucheron "github.com/wesen/bucheron/pkg"
 	"golang.org/x/sync/errgroup"
 	"os"
+	app2 "ppa-control/cmd/ui-test/app"
 	"ppa-control/lib/utils"
 	"time"
 )
 
-const DEFAULT_COMPONENT_ID = 0xFF
-
-var app = &App{}
+var app = &app2.App{}
 
 var rootCmd = &cobra.Command{
 	Use:   "ui",
 	Short: "main ppa-control UI",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		appConfig := NewAppConfigFromCommand(cmd)
+		appConfig := app2.NewAppConfigFromCommand(cmd)
 
-		app = &App{
+		app = &app2.App{
 			Config: appConfig,
 		}
-		err := app.initLogger()
+		err := app.InitLogger()
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize logger")
 		}
@@ -50,17 +49,16 @@ var uploadCmd = &cobra.Command{
 	Use:   "upload",
 	Short: "Upload a file to the PPA",
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx := context.Background()
 
-		progressChannel := make(chan bucheron.UploadProgress)
-		errGroup := errgroup.Group{}
+		progressChannel := make(chan bucheron.ProgressEvent)
+		errGroup, ctx2 := errgroup.WithContext(ctx)
 
 		errGroup.Go(func() error {
-			defer cancel()
 			for {
 				select {
-				case <-ctx.Done():
-					return ctx.Err()
+				case <-ctx2.Done():
+					return ctx2.Err()
 				case progress, ok := <-progressChannel:
 					if !ok {
 						return nil
@@ -72,7 +70,7 @@ var uploadCmd = &cobra.Command{
 		})
 
 		errGroup.Go(func() error {
-			return app.UploadLogs(ctx, progressChannel)
+			return app.UploadLogs(ctx2, progressChannel)
 		})
 
 		err := errGroup.Wait()
@@ -86,7 +84,7 @@ func init() {
 
 	rootCmd.AddCommand(uploadCmd)
 
-	AddAppConfigFlags(rootCmd)
+	app2.AddAppConfigFlags(rootCmd)
 
 }
 

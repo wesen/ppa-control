@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -14,19 +14,20 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
-	"ppa-control/cmd/ui-test/ui"
 	"ppa-control/lib/client"
 	"ppa-control/lib/client/discovery"
 	logger "ppa-control/lib/log"
+	"syscall"
 	"time"
 )
 
 type App struct {
-	Config  *AppConfig
-	LogsDir string
+	Config      *AppConfig
+	LogsDir     string
+	MultiClient *client.MultiClient
 }
 
-func (a *App) initLogger() error {
+func (a *App) InitLogger() error {
 	fmt.Println("withCaller", a.Config.WithCaller)
 	logger.InitializeLogger(a.Config.WithCaller)
 	// default is json
@@ -79,11 +80,11 @@ func (a *App) initLogger() error {
 	return nil
 }
 
-func (a *App) UploadLogs(ctx context.Context, progressCh chan bucheron.UploadProgress) error {
+func (a *App) UploadLogs(ctx context.Context, progressCh chan bucheron.ProgressEvent) error {
 	defer close(progressCh)
 
 	log.Info().Msg("Uploading logs")
-	progressCh <- bucheron.UploadProgress{
+	progressCh <- bucheron.ProgressEvent{
 		StepProgress: 0,
 		Step:         "Getting upload credentials",
 		IsError:      false,
@@ -91,7 +92,7 @@ func (a *App) UploadLogs(ctx context.Context, progressCh chan bucheron.UploadPro
 	credentials, err := bucheron.GetUploadCredentials(ctx, a.Config.LogUploadAPI)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get upload credentials")
-		progressCh <- bucheron.UploadProgress{
+		progressCh <- bucheron.ProgressEvent{
 			StepProgress: 0,
 			Step:         "Failed to get upload credentials",
 			IsError:      true,
@@ -99,7 +100,7 @@ func (a *App) UploadLogs(ctx context.Context, progressCh chan bucheron.UploadPro
 		return err
 	}
 
-	settings := &bucheron.UploadSettings{
+	settings := &bucheron.BucketSettings{
 		Region:      a.Config.LogUploadRegion,
 		Bucket:      a.Config.LogUploadBucket,
 		Credentials: credentials,
@@ -121,8 +122,8 @@ func (a *App) UploadLogs(ctx context.Context, progressCh chan bucheron.UploadPro
 		log.Error().Err(err).Msg("Failed to walk logs dir")
 	}
 
-	if a.Config.configFolders.configFile != "" {
-		files = append(files, a.Config.configFolders.configFile)
+	if a.Config.ConfigFolders.ConfigFile != "" {
+		files = append(files, a.Config.ConfigFolders.ConfigFile)
 	}
 
 	data := &bucheron.UploadData{
@@ -147,9 +148,9 @@ func (a *App) Run() {
 	receivedCh := make(chan client.ReceivedMessage)
 	discoveryCh := make(chan discovery.PeerInformation)
 
-	if a.Config.saveConfig {
-		if a.Config.configFolders.configFile != "" {
-			configFilePath := a.Config.configFolders.configFile
+	if a.Config.SaveConfig {
+		if a.Config.ConfigFolders.ConfigFile != "" {
+			configFilePath := a.Config.ConfigFolders.ConfigFile
 			log.Info().Str("path", configFilePath).Msg("Found config file")
 			err := a.Config.SaveToFile(configFilePath)
 			if err != nil {
@@ -158,13 +159,13 @@ func (a *App) Run() {
 		}
 	}
 
-	multiClient := client.NewMultiClient("ui")
+	a.MultiClient = client.NewMultiClient("ui")
 	for _, addr := range a.Config.Addresses {
 		if addr == "" {
 			continue
 		}
 		log.Info().Msgf("adding pkg %s", addr)
-		_, err := multiClient.AddClient(ctx2, addr, "", a.Config.ComponentId)
+		_, err := a.MultiClient.AddClient(ctx2, addr, "", a.Config.ComponentId)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to add pkg")
 		}
@@ -178,13 +179,18 @@ func (a *App) Run() {
 
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
-	ui_ := ui.BuildUI(multiClient, cancel)
+	ui_ := BuildUI(a, cancel)
 	ui_.Log("ppa-control started, waiting for devices...")
 
 	grp.Go(func() error {
-		return multiClient.Run(ctx2, &receivedCh)
+		return a.MultiClient.Run(ctx2, &receivedCh)
 	})
 
+	grp.Go(func() error {
+		return bucheron.CancelOnSignal(ctx, syscall.SIGINT, cancel)
+	})
+
+	// This is the peer handling
 	grp.Go(func() error {
 		for {
 			select {
@@ -212,9 +218,10 @@ func (a *App) Run() {
 						Str("iface", msg.GetInterface()).
 						Msg("peer discovered")
 					ui_.Log("Peer discovered: " + msg.GetAddress())
-					c, err := multiClient.AddClient(ctx, msg.GetAddress(), msg.GetInterface(), a.Config.ComponentId)
+					c, err := a.MultiClient.AddClient(ctx, msg.GetAddress(), msg.GetInterface(), a.Config.ComponentId)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to add pkg")
+						cancel()
 						return err
 					}
 					// send immediate ping
@@ -225,9 +232,10 @@ func (a *App) Run() {
 						Str("iface", msg.GetInterface()).
 						Msg("peer lost")
 					ui_.Log("Peer lost: " + msg.GetAddress())
-					err := multiClient.CancelClient(msg.GetAddress())
+					err := a.MultiClient.CancelClient(msg.GetAddress())
 					if err != nil {
 						log.Error().Err(err).Msg("failed to remove pkg")
+						cancel()
 						return err
 					}
 				}
@@ -244,8 +252,10 @@ func (a *App) Run() {
 		if err != nil {
 			log.Error().Err(err).Msg("Error in main loop")
 		}
+
+		// TODO(manuel, 2023-01-06) We need an error dialog here
+		ui_.Close()
 	}()
 
 	ui_.Run()
-
 }

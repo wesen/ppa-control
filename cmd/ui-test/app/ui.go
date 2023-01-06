@@ -1,4 +1,4 @@
-package ui
+package app
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/rs/zerolog/log"
-	"ppa-control/lib/client"
 )
 
 type UI struct {
 	window  fyne.Window
 	console binding.String
-	app     fyne.App
+	fyneApp fyne.App
+	app     *App
 }
 
 func (ui *UI) Log(line string) {
@@ -34,10 +34,16 @@ func (ui *UI) Run() {
 	ui.window.ShowAndRun()
 }
 
-func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
+func (ui *UI) Close() {
+	ui.window.Close()
+}
+
+// TODO(manuel, 2023-01-06) this whole UI struct containing the app containing the UI is not great
+func BuildUI(ppa_app *App, cancel context.CancelFunc) *UI {
 	a := app.New()
 	ui := &UI{
-		app:     a,
+		fyneApp: a,
+		app:     ppa_app,
 		window:  a.NewWindow("PPA Control"),
 		console: binding.NewString(),
 	}
@@ -64,7 +70,7 @@ func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
 		j := i
 		presetButtons[i] = widget.NewButton(fmt.Sprintf("Preset %d", i+1),
 			func() {
-				multiClient.SendPresetRecallByPresetIndex(j)
+				ppa_app.MultiClient.SendPresetRecallByPresetIndex(j)
 				log.Info().Msg(fmt.Sprintf("Preset %d clicked", j+1))
 			})
 	}
