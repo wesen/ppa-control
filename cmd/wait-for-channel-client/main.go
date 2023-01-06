@@ -24,19 +24,19 @@ func (c *Client) Run(ctx context.Context) error {
 
 		select {
 		case <-ctx.Done():
-			log.Println("C: client done")
+			log.Println("C: pkg done")
 			return ctx.Err()
 		case <-t.C:
 			for i := 0; i < 10; i++ {
-				log.Println("C: waiting for client write")
+				log.Println("C: waiting for pkg write")
 				time.Sleep(1 * time.Second)
-				log.Println("C: client write")
+				log.Println("C: pkg write")
 				select {
 				case <-ctx.Done():
-					log.Println("C: client done")
+					log.Println("C: pkg done")
 					return ctx.Err()
 				case c.ch <- i:
-					log.Println("C: wrote to client channel", i)
+					log.Println("C: wrote to pkg channel", i)
 				}
 			}
 		}
@@ -50,21 +50,21 @@ func run(ctx context.Context) error {
 
 	grp, ctx := errgroup.WithContext(ctx)
 	grp.Go(func() error {
-		log.Println("R: starting client")
+		log.Println("R: starting pkg")
 		err := client.Run(ctx)
-		log.Println("R: client done")
+		log.Println("R: pkg done")
 		return err
 	})
 
 	grp.Go(func() error {
 		for {
-			log.Println("R: waiting for client read")
+			log.Println("R: waiting for pkg read")
 			select {
 			case <-ctx.Done():
 				log.Println("R: done")
 				return ctx.Err()
 			case v := <-client.ch:
-				log.Println("R: read from client channel", v)
+				log.Println("R: read from pkg channel", v)
 				println(v)
 			}
 		}

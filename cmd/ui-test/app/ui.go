@@ -1,4 +1,4 @@
-package ui
+package app
 
 import (
 	"context"
@@ -10,12 +10,12 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/rs/zerolog/log"
-	"ppa-control/lib/client"
 )
 
 type UI struct {
 	window  fyne.Window
 	console binding.String
+	fyneApp fyne.App
 }
 
 func (ui *UI) Log(line string) {
@@ -33,10 +33,16 @@ func (ui *UI) Run() {
 	ui.window.ShowAndRun()
 }
 
-func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
-	a := app.New()
+func (ui *UI) Close() {
+	ui.window.Close()
+}
+
+// TODO(manuel, 2023-01-06) this whole UI struct containing the app containing the UI is not great
+func (a *App) BuildUI(cancel context.CancelFunc) *UI {
+	fyneApp := app.New()
 	ui := &UI{
-		window:  a.NewWindow("PPA Control"),
+		fyneApp: fyneApp,
+		window:  fyneApp.NewWindow("PPA Control"),
 		console: binding.NewString(),
 	}
 	_ = ui.console.Set("")
@@ -49,13 +55,20 @@ func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
 	//clientScrollContainer := container.NewVScroll(clientConsole)
 	//clientScrollContainer.SetMinSize(fyne.NewSize(600, 150))
 
+	openSettingsButton := widget.NewButton("Open SettingsUI", func() {
+		settingsPopup := a.BuildSettingsUI()
+		settingsPopup.Show()
+	})
+
+	settingsButtonContainer := container.NewHBox(openSettingsButton)
+
 	presetCount := 16
 	var presetButtons = make([]fyne.CanvasObject, presetCount)
 	for i := 0; i < presetCount; i++ {
 		j := i
 		presetButtons[i] = widget.NewButton(fmt.Sprintf("Preset %d", i+1),
 			func() {
-				multiClient.SendPresetRecallByPresetIndex(j)
+				a.MultiClient.SendPresetRecallByPresetIndex(j)
 				log.Info().Msg(fmt.Sprintf("Preset %d clicked", j+1))
 			})
 	}
@@ -88,10 +101,12 @@ func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
 	//
 	// we also need title fields
 	// 4 buttons for the fixed volumes
-	// a side bar and the volume
+	// fyneApp side bar and the volume
 
 	mainGridContainer := container.NewVBox(
 		presetButtonContainer,
+		widget.NewSeparator(),
+		settingsButtonContainer,
 		//widget.NewSeparator(),
 		//clientScrollContainer,
 		widget.NewSeparator(),
@@ -121,7 +136,7 @@ func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
 	//	widget.NewSeparator(),
 	//	//sliderContainer,
 	//)
-	ui.window.SetContent(mainGridContainer) // This is a text entry field
+	ui.window.SetContent(mainGridContainer) // This is fyneApp text entry field
 	//ui.window.Resize(fyne.NewSize(800, 800))
 
 	ui.window.SetOnClosed(func() {
@@ -130,5 +145,6 @@ func BuildUI(multiClient *client.MultiClient, cancel context.CancelFunc) *UI {
 		log.Info().Msg("After cancel")
 	})
 
+	a.ui = ui
 	return ui
 }
