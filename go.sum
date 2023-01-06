@@ -325,6 +325,8 @@ github.com/tevino/abool v1.2.0/go.mod h1:qc66Pna1RiIsPa7O4Egxxs9OqkuxDX55zznh9K0
 github.com/urfave/cli/v2 v2.4.0/go.mod h1:NX9W0zmTvedE5oDoOMs2RTC8RvdK98NTYZE5LbaEYPg=
 github.com/wesen/bucheron v0.0.0-20230106013940-2e9c51af86c7 h1:RrbS6Q5e/V+nHzVQKu5KQq1M1Hxaif/faIZJ4Vdu6v4=
 github.com/wesen/bucheron v0.0.0-20230106013940-2e9c51af86c7/go.mod h1:26PmnFZdqRmzcgw0reN9qV2eXPcu2ojgFRuu/FydaOc=
+github.com/wesen/bucheron v0.0.0-20230106220620-383b318f0ba2 h1:v6NTPdCXmWAoquOO8GOVqUcFdZieQS8S7l84bsPBlPg=
+github.com/wesen/bucheron v0.0.0-20230106220620-383b318f0ba2/go.mod h1:26PmnFZdqRmzcgw0reN9qV2eXPcu2ojgFRuu/FydaOc=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

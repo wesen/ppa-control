@@ -10,7 +10,7 @@ require (
 	github.com/rs/zerolog v1.28.0
 	github.com/shibukawa/configdir v0.0.0-20170330084843-e180dbdc8da0
 	github.com/spf13/cobra v1.6.1
-	github.com/wesen/bucheron v0.0.0-20230106013940-2e9c51af86c7
+	github.com/wesen/bucheron v0.0.0-20230106220620-383b318f0ba2
 	go.uber.org/atomic v1.9.0
 	golang.org/x/sync v0.1.0
 	golang.org/x/sys v0.1.0
