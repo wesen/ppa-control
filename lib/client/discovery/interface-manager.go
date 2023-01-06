@@ -59,7 +59,7 @@ func (im *InterfaceManager) DoesInterfaceExist(iface InterfaceName) bool {
 	return ok
 }
 
-// StartInterfaceClient will create and start a client for the given interface,
+// StartInterfaceClient will create and start a pkg for the given interface,
 // with target address the broadcast address 255.255.255.255 .
 func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface InterfaceName) (error, *client.SingleDevice) {
 	if im.waiting.Load() {
@@ -74,16 +74,16 @@ func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface Inte
 
 	broadcastAddr := fmt.Sprintf("255.255.255.255:%d", im.port)
 
-	log.Debug().Str("iface", iface).Str("addr", broadcastAddr).Msg("creating client")
+	log.Debug().Str("iface", iface).Str("addr", broadcastAddr).Msg("creating pkg")
 
-	// now, create a client bound to the interface with the address being 255.255.255.255
+	// now, create a pkg bound to the interface with the address being 255.255.255.255
 	c := client.NewSingleDevice(broadcastAddr, iface, 0xfe)
 
 	clientCtx, cancel := context.WithCancel(ctx)
 	log.Debug().
 		Str("iface", iface).
 		Str("addr", broadcastAddr).
-		Msg("adding client")
+		Msg("adding pkg")
 	func() {
 		im.mutex.Lock()
 		defer func() {
@@ -101,10 +101,10 @@ func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface Inte
 		log.Info().
 			Str("iface", iface).
 			Str("addr", broadcastAddr).
-			Msg("starting client")
+			Msg("starting pkg")
 		err := c.Run(clientCtx, im.receivedCh)
 
-		// remove the client from the hashtables once done
+		// remove the pkg from the hashtables once done
 		func() {
 			im.mutex.Lock()
 			defer im.mutex.Unlock()
@@ -115,17 +115,17 @@ func (im *InterfaceManager) StartInterfaceClient(ctx context.Context, iface Inte
 
 		im.wg.Done()
 		if err != nil {
-			log.Error().Err(err).Msg("error while running client")
+			log.Error().Err(err).Msg("error while running pkg")
 		}
 
-		log.Info().Str("iface", iface).Err(err).Msg("client stopped")
+		log.Info().Str("iface", iface).Err(err).Msg("pkg stopped")
 	}()
 
 	return nil, c
 }
 
-// CancelInterfaceClient will cancel the client for the given interface.
-// The interface client will be removed from the list of interfaces once it
+// CancelInterfaceClient will cancel the pkg for the given interface.
+// The interface pkg will be removed from the list of interfaces once it
 // is done.
 func (im *InterfaceManager) CancelInterfaceClient(iface string) error {
 	if !im.DoesInterfaceExist(iface) {
@@ -151,7 +151,7 @@ func (im *InterfaceManager) Wait() {
 	log.Debug().Msg("all clients are done")
 }
 
-// GetClientInterfaces returns a list of the names of the interfaces that have a client.
+// GetClientInterfaces returns a list of the names of the interfaces that have a pkg.
 // This also returns the names of interfaces that have been cancelled but haven't yet been removed.
 func (im *InterfaceManager) GetClientInterfaces() []string {
 	im.mutex.RLock()

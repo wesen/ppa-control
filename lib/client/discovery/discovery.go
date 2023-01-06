@@ -102,7 +102,7 @@ func Discover(
 			case msg := <-receivedCh:
 				if msg.Header != nil {
 					log.Info().Str("from", msg.RemoteAddress.String()).
-						Str("client", msg.Client.Name()).
+						Str("pkg", msg.Client.Name()).
 						Str("iface", msg.Interface).
 						Str("type", msg.Header.MessageType.String()).
 						Str("status", msg.Header.Status.String()).
@@ -127,7 +127,7 @@ func Discover(
 					log.Debug().Str("addr", msg.RemoteAddress.String()).Msg("peer lastSeen updated")
 				} else {
 					log.Debug().Str("from", msg.RemoteAddress.String()).
-						Str("client", msg.Client.Name()).
+						Str("pkg", msg.Client.Name()).
 						Msg("received unknown message")
 				}
 

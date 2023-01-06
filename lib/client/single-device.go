@@ -26,10 +26,10 @@ type Client interface {
 	Name() string
 }
 
-// A client has multiple target addresses, and no source address (?).
+// A pkg has multiple target addresses, and no source address (?).
 //That actually won't work either, will it...
 
-// A client should have a list of targeted *UDPAddr, to avoid having to pass strings with ports around (?)
+// A pkg should have a list of targeted *UDPAddr, to avoid having to pass strings with ports around (?)
 // I actually think the current structure is not too bad for the clients...
 // We just need to have the multiclient be able to add and remove clients (?)
 //
@@ -119,7 +119,7 @@ func (c *SingleDevice) SendPresetRecallByPresetIndex(index int) {
 	c.SendChannel <- buf
 }
 
-// Run is the main loop for the client.  It will listen for messages on the sendChannel
+// Run is the main loop for the pkg.  It will listen for messages on the sendChannel
 // and emit them on the UDP socket, and it will listen for incoming packets on the UDP socket,
 // parse them and emit them on the receiveChannel.
 func (c *SingleDevice) Run(ctx context.Context, receivedCh *chan ReceivedMessage) (err error) {

@@ -52,11 +52,11 @@ var pingCmd = &cobra.Command{
 				continue
 			}
 			// although that's weird, in the case I want to specify over which iface to reach things.
-			// say i have a simulated client bound to en0, then this will resolve the iface to be lo0.
+			// say i have a simulated pkg bound to en0, then this will resolve the iface to be lo0.
 			// this might mostly just be an issue with local testing.
 			_, err := multiClient.AddClient(ctx, fmt.Sprintf("%s:%d", addr, port), "", componentId)
 			if err != nil {
-				log.Fatal().Err(err).Msg("failed to add client")
+				log.Fatal().Err(err).Msg("failed to add pkg")
 			}
 		}
 
@@ -88,13 +88,13 @@ var pingCmd = &cobra.Command{
 				case msg := <-receivedCh:
 					if msg.Header != nil {
 						log.Info().Str("from", msg.RemoteAddress.String()).
-							Str("client", msg.Client.Name()).
+							Str("pkg", msg.Client.Name()).
 							Str("type", msg.Header.MessageType.String()).
 							Str("status", msg.Header.Status.String()).
 							Msg("received message")
 					} else {
 						log.Debug().Str("from", msg.RemoteAddress.String()).
-							Str("client", msg.Client.Name()).
+							Str("pkg", msg.Client.Name()).
 							Msg("received unknown message")
 					}
 
@@ -109,7 +109,7 @@ var pingCmd = &cobra.Command{
 							Msg("peer discovered")
 						c, err := multiClient.AddClient(ctx, msg.GetAddress(), msg.GetInterface(), componentId)
 						if err != nil {
-							log.Error().Err(err).Msg("failed to add client")
+							log.Error().Err(err).Msg("failed to add pkg")
 							return err
 						}
 						// send immediate ping
@@ -121,7 +121,7 @@ var pingCmd = &cobra.Command{
 							Msg("peer lost")
 						err := multiClient.CancelClient(msg.GetAddress())
 						if err != nil {
-							log.Error().Err(err).Msg("failed to remove client")
+							log.Error().Err(err).Msg("failed to remove pkg")
 							return err
 						}
 					}

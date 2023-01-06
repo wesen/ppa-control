@@ -34,10 +34,10 @@ var recallCmd = &cobra.Command{
 			if addr == "" {
 				continue
 			}
-			// TODO allow passing in the interface name for a client, here
+			// TODO allow passing in the interface name for a pkg, here
 			_, err := multiClient.AddClient(ctx, addr, "", componentId)
 			if err != nil {
-				log.Fatal().Err(err).Msg("failed to add client")
+				log.Fatal().Err(err).Msg("failed to add pkg")
 			}
 		}
 
@@ -73,7 +73,7 @@ var recallCmd = &cobra.Command{
 							Msg("peer discovered")
 						c, err := multiClient.AddClient(ctx, msg.GetAddress(), msg.GetInterface(), componentId)
 						if err != nil {
-							log.Error().Err(err).Msg("failed to add client")
+							log.Error().Err(err).Msg("failed to add pkg")
 							return err
 						}
 						// immediately send preset recall on discovery
@@ -85,7 +85,7 @@ var recallCmd = &cobra.Command{
 							Msg("peer lost")
 						err := multiClient.CancelClient(msg.GetAddress())
 						if err != nil {
-							log.Error().Err(err).Msg("failed to remove client")
+							log.Error().Err(err).Msg("failed to remove pkg")
 							return err
 						}
 					}
@@ -94,13 +94,13 @@ var recallCmd = &cobra.Command{
 					if msg.Header != nil {
 						log.Info().Str("from", msg.RemoteAddress.String()).
 							Str("type", msg.Header.MessageType.String()).
-							Str("client", msg.Client.Name()).
+							Str("pkg", msg.Client.Name()).
 							Str("status", msg.Header.Status.String()).
 							Msg("received message")
 					} else {
 						log.Debug().
 							Str("from", msg.RemoteAddress.String()).
-							Str("client", msg.Client.Name()).
+							Str("pkg", msg.Client.Name()).
 							Msg("received unknown message")
 					}
 
