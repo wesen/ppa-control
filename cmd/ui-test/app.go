@@ -2,194 +2,24 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/shibukawa/configdir"
-	"github.com/spf13/cobra"
+	bucheron "github.com/wesen/bucheron/pkg"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"ppa-control/cmd/ui-test/ui"
 	"ppa-control/lib/client"
 	"ppa-control/lib/client/discovery"
 	logger "ppa-control/lib/log"
+	"time"
 )
-
-type AppConfigFolders struct {
-	configDirs   configdir.ConfigDir
-	queryFolders []*configdir.Config
-	configFile   string
-}
-
-func CreateAppConfigFolders() *AppConfigFolders {
-	acf := &AppConfigFolders{}
-	acf.configDirs = configdir.New("Hoffmann Audio", "ppa-control")
-	acf.queryFolders = acf.configDirs.QueryFolders(configdir.Global)
-	queryFolder := acf.configDirs.QueryFolderContainsFile("config.json")
-	if queryFolder != nil {
-		acf.configFile = path.Join(queryFolder.Path, "config.json")
-	}
-
-	return acf
-
-}
-
-type AppConfig struct {
-	WithCaller bool   `json:"withCaller"`
-	LogFormat  string `json:"logFormat"`
-	LogLevel   string `json:"logLevel"`
-
-	Addresses   []string `json:"addresses"`
-	ComponentId uint     `json:"componentId"`
-	Discover    bool     `json:"discover"`
-	Port        uint     `json:"port"`
-	Interfaces  []string `json:"interfaces"`
-
-	saveConfig bool
-
-	LogUploadAPI    string `json:"logUploadAPI"`
-	LogUploadBucket string `json:"logUploadBucket"`
-	LogUploadRegion string `json:"logUploadRegion"`
-
-	configFolders *AppConfigFolders
-}
-
-func NewAppConfig() *AppConfig {
-	return &AppConfig{
-		WithCaller:  false,
-		LogFormat:   "text",
-		LogLevel:    "debug",
-		Addresses:   []string{},
-		Discover:    true,
-		Port:        5001,
-		Interfaces:  []string{},
-		ComponentId: DEFAULT_COMPONENT_ID,
-
-		LogUploadAPI:    "https://npyksyvjqj.execute-api.us-east-1.amazonaws.com/v1/",
-		LogUploadBucket: "wesen-ppa-control-logs",
-		LogUploadRegion: "us-east-1",
-	}
-}
-
-func NewAppConfigFromFile(acf *AppConfigFolders) (*AppConfig, error) {
-	if acf.configFile != "" {
-		log.Info().Str("path", acf.configFile).Msg("Found config file")
-		f, err := os.Open(acf.configFile)
-		if err != nil {
-			return nil, err
-		}
-		defer f.Close()
-		data, err := io.ReadAll(f)
-		if err != nil {
-			return nil, err
-		}
-
-		config := NewAppConfig()
-		err = json.Unmarshal(data, config)
-		if err != nil {
-			return nil, err
-		}
-		return config, nil
-	} else {
-		return nil, nil
-	}
-}
-
-func AddAppConfigFlags(cmd *cobra.Command) {
-	defaultConfig := CreateDefaultAppConfig()
-
-	cmd.PersistentFlags().String("log-level", defaultConfig.LogLevel, "Log level")
-	cmd.PersistentFlags().String("log-format", defaultConfig.LogFormat, "Log format (json, text)")
-	cmd.PersistentFlags().Bool("with-caller", defaultConfig.WithCaller, "Log caller")
-	cmd.PersistentFlags().StringArrayP(
-		"addresses", "a", defaultConfig.Addresses,
-		"Addresses to ping, comma separated",
-	)
-	// disable discovery by default when pinging
-	cmd.PersistentFlags().BoolP(
-		"discover", "d", defaultConfig.Discover,
-		"Send broadcast discovery messages",
-	)
-
-	cmd.PersistentFlags().StringArray("interfaces", defaultConfig.Interfaces, "Interfaces to use for discovery")
-
-	cmd.PersistentFlags().UintP(
-		"componentId", "c", defaultConfig.ComponentId,
-		"Component ID to use for devices")
-
-	cmd.PersistentFlags().UintP("port", "p", defaultConfig.Port, "Port to ping on")
-
-	cmd.PersistentFlags().String(
-		"api",
-		defaultConfig.LogUploadAPI,
-		"URL of the bucheron API")
-	cmd.PersistentFlags().String("bucket", defaultConfig.LogUploadBucket, "S3 bucket to upload to")
-	cmd.PersistentFlags().String("region", defaultConfig.LogUploadRegion, "Region of the S3 bucket")
-
-	cmd.Flags().Bool("save-config", defaultConfig.saveConfig, "Save config to file")
-}
-
-func CreateDefaultAppConfig() *AppConfig {
-	acf := CreateAppConfigFolders()
-	defaultConfig, err := NewAppConfigFromFile(acf)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load config file")
-	}
-	if defaultConfig == nil {
-		defaultConfig = NewAppConfig()
-	}
-	defaultConfig.configFolders = acf
-	return defaultConfig
-}
-
-func (ac *AppConfig) SaveToFile(file string) error {
-	f, err := os.Create(file)
-	if err != nil {
-		return err
-	}
-
-	encoder := json.NewEncoder(f)
-	encoder.SetIndent("", "  ")
-	err = encoder.Encode(ac)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func NewAppConfigFromCommand(cmd *cobra.Command) *AppConfig {
-	config := CreateDefaultAppConfig()
-
-	withCaller, _ := cmd.Flags().GetBool("with-caller")
-	logFormat, _ := cmd.Flags().GetString("log-format")
-	logLevel, _ := cmd.Flags().GetString("log-level")
-
-	addresses, _ := cmd.Flags().GetStringArray("addresses")
-	componentId, _ := cmd.Flags().GetUint("componentId")
-	discover, _ := cmd.Flags().GetBool("discover")
-	port, _ := cmd.Flags().GetUint("port")
-	interfaces, _ := cmd.Flags().GetStringArray("interfaces")
-
-	saveConfig, _ := cmd.Flags().GetBool("save-config")
-
-	config.WithCaller = withCaller
-	config.LogFormat = logFormat
-	config.LogLevel = logLevel
-	config.Addresses = addresses
-	config.ComponentId = componentId
-	config.Discover = discover
-	config.Port = port
-	config.Interfaces = interfaces
-	config.saveConfig = saveConfig
-
-	return config
-}
 
 type App struct {
 	Config  *AppConfig
@@ -249,8 +79,59 @@ func (a *App) initLogger() error {
 	return nil
 }
 
-func (a *App) UploadLogs(ctx context.Context) {
-	//credentials, err := bucheron.GetUploadCredentials(ctx, a.Config.logUploadAPI)
+func (a *App) UploadLogs(ctx context.Context, progressCh chan bucheron.UploadProgress) error {
+	defer close(progressCh)
+
+	log.Info().Msg("Uploading logs")
+	progressCh <- bucheron.UploadProgress{
+		StepProgress: 0,
+		Step:         "Getting upload credentials",
+		IsError:      false,
+	}
+	credentials, err := bucheron.GetUploadCredentials(ctx, a.Config.LogUploadAPI)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get upload credentials")
+		progressCh <- bucheron.UploadProgress{
+			StepProgress: 0,
+			Step:         "Failed to get upload credentials",
+			IsError:      true,
+		}
+		return err
+	}
+
+	settings := &bucheron.UploadSettings{
+		Region:      a.Config.LogUploadRegion,
+		Bucket:      a.Config.LogUploadBucket,
+		Credentials: credentials,
+	}
+
+	files := []string{}
+
+	// gather all files in a.LogsDir
+	err = filepath.Walk(a.LogsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to walk logs dir")
+	}
+
+	if a.Config.configFolders.configFile != "" {
+		files = append(files, a.Config.configFolders.configFile)
+	}
+
+	data := &bucheron.UploadData{
+		Files:    files,
+		Comment:  fmt.Sprintf("ppa-control upload at %s", time.Now().Format(time.RFC3339)),
+		Metadata: nil,
+	}
+
+	return bucheron.UploadLogs(ctx, settings, data, progressCh)
 }
 
 func (a *App) Run() {

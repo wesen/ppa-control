@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	bucheron "github.com/wesen/bucheron/pkg"
+	"golang.org/x/sync/errgroup"
 	"os"
 	"ppa-control/lib/utils"
 	"time"
@@ -16,7 +19,7 @@ var app = &App{}
 var rootCmd = &cobra.Command{
 	Use:   "ui",
 	Short: "main ppa-control UI",
-	Run: func(cmd *cobra.Command, args []string) {
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		appConfig := NewAppConfigFromCommand(cmd)
 
 		app = &App{
@@ -37,13 +40,51 @@ var rootCmd = &cobra.Command{
 			log.Info().Msg("tracking memory and goroutine leaks")
 			utils.StartBackgroundLeakTracker(5 * time.Second)
 		}
+	},
+	Run: func(cmd *cobra.Command, args []string) {
 		app.Run()
+	},
+}
+
+var uploadCmd = &cobra.Command{
+	Use:   "upload",
+	Short: "Upload a file to the PPA",
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx, cancel := context.WithCancel(context.Background())
+
+		progressChannel := make(chan bucheron.UploadProgress)
+		errGroup := errgroup.Group{}
+
+		errGroup.Go(func() error {
+			defer cancel()
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case progress, ok := <-progressChannel:
+					if !ok {
+						return nil
+					}
+					fmt.Printf("%v: %v\n", progress, ok)
+					fmt.Printf("Progress: %s %f\n", progress.Step, progress.StepProgress)
+				}
+			}
+		})
+
+		errGroup.Go(func() error {
+			return app.UploadLogs(ctx, progressChannel)
+		})
+
+		err := errGroup.Wait()
+		cobra.CheckErr(err)
 	},
 }
 
 func init() {
 	rootCmd.PersistentFlags().String("dump-mem-profile", "", "Dump memory profile to file")
 	rootCmd.PersistentFlags().Bool("track-leaks", false, "Track memory and goroutine leaks")
+
+	rootCmd.AddCommand(uploadCmd)
 
 	AddAppConfigFlags(rootCmd)
 
@@ -54,4 +95,5 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
 }
