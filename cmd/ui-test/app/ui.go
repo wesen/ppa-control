@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -13,9 +12,10 @@ import (
 )
 
 type UI struct {
-	window  fyne.Window
-	console binding.String
-	fyneApp fyne.App
+	window             fyne.Window
+	console            binding.String
+	fyneApp            fyne.App
+	presetEditorWindow fyne.Window
 }
 
 func (ui *UI) Log(line string) {
@@ -37,6 +37,25 @@ func (ui *UI) Close() {
 	ui.window.Close()
 }
 
+func (a *App) createPresetButtons() []fyne.CanvasObject {
+	ret := make([]fyne.CanvasObject, 0)
+
+	for _, preset := range a.Presets {
+		ret = append(ret, widget.NewButton(preset.Name, func() {
+			a.switchPreset(preset)
+		}))
+	}
+
+	return ret
+}
+
+func (a *App) switchPreset(preset *Preset) {
+	log.Info().Int("presetIndex", preset.PresetIndex).
+		Str("presetName", preset.Name).
+		Msg("Preset clicked")
+	a.MultiClient.SendPresetRecallByPresetIndex(preset.PresetIndex)
+}
+
 // TODO(manuel, 2023-01-06) this whole UI struct containing the app containing the UI is not great
 func (a *App) BuildUI(cancel context.CancelFunc) *UI {
 	fyneApp := app.New()
@@ -55,24 +74,29 @@ func (a *App) BuildUI(cancel context.CancelFunc) *UI {
 	//clientScrollContainer := container.NewVScroll(clientConsole)
 	//clientScrollContainer.SetMinSize(fyne.NewSize(600, 150))
 
-	openSettingsButton := widget.NewButton("Open SettingsUI", func() {
-		settingsPopup := a.BuildSettingsUI()
-		settingsPopup.Show()
+	uploadLogs := widget.NewButton("Upload Logs", func() {
+		uploadLogsPopup := a.BuildUploadLogsUI()
+		uploadLogsPopup.Show()
 	})
 
-	settingsButtonContainer := container.NewHBox(openSettingsButton)
+	settingsButtonContainer := container.NewHBox(
+		uploadLogs,
+		widget.NewButton("Edit Presets", func() {
+			a.ShowPresetEditor()
+		}),
+	)
 
-	presetCount := 16
-	var presetButtons = make([]fyne.CanvasObject, presetCount)
-	for i := 0; i < presetCount; i++ {
-		j := i
-		presetButtons[i] = widget.NewButton(fmt.Sprintf("Preset %d", i+1),
-			func() {
-				a.MultiClient.SendPresetRecallByPresetIndex(j)
-				log.Info().Msg(fmt.Sprintf("Preset %d clicked", j+1))
-			})
-	}
-	presetButtonContainer := container.New(layout.NewGridLayout(4), presetButtons...)
+	//presetCount := 16
+	//var presetButtons = make([]fyne.CanvasObject, presetCount)
+	//for i := 0; i < presetCount; i++ {
+	//	j := i
+	//	presetButtons[i] = widget.NewButton(fmt.Sprintf("Preset %d", i+1),
+	//		func() {
+	//			a.MultiClient.SendPresetRecallByPresetIndex(j)
+	//		})
+	//}
+	presetButtons := a.createPresetButtons()
+	a.presetButtonContainer = container.New(layout.NewGridLayout(4), presetButtons...)
 
 	//var controlButtons []fyne.CanvasObject = make([]fyne.CanvasObject, 8)
 	//for i := 0; i < 8; i++ {
@@ -104,7 +128,7 @@ func (a *App) BuildUI(cancel context.CancelFunc) *UI {
 	// fyneApp side bar and the volume
 
 	mainGridContainer := container.NewVBox(
-		presetButtonContainer,
+		a.presetButtonContainer,
 		widget.NewSeparator(),
 		settingsButtonContainer,
 		//widget.NewSeparator(),

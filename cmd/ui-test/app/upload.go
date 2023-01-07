@@ -10,7 +10,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type SettingsUI struct {
+type UploadLogsUI struct {
 	uploadButton *widget.Button
 	cancelButton *widget.Button
 	closeButton  *widget.Button
@@ -21,7 +21,7 @@ type SettingsUI struct {
 	uploadCancel func()
 }
 
-func (s *SettingsUI) handleUpload() {
+func (s *UploadLogsUI) handleUpload() {
 	progressChannel := make(chan bucheron.ProgressEvent)
 	// TODO(manuel, 2023-01-06): this needs to be an app Context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -69,54 +69,59 @@ func (s *SettingsUI) handleUpload() {
 	}()
 }
 
-func (s *SettingsUI) handleCancel() {
+func (s *UploadLogsUI) handleCancel() {
 	fmt.Println("Cancel")
 	if s.uploadCancel != nil {
 		s.uploadCancel()
 	}
 }
 
-func (s *SettingsUI) handleClose() {
+func (s *UploadLogsUI) handleClose() {
 	s.popup.Hide()
 }
 
-func (s *SettingsUI) Show() {
+func (s *UploadLogsUI) Show() {
 	s.popup.Show()
 }
 
-func (a *App) BuildSettingsUI() *SettingsUI {
-	settings := &SettingsUI{
+func (a *App) BuildUploadLogsUI() *UploadLogsUI {
+	uploadLogsUI := &UploadLogsUI{
 		app: a,
 	}
 	// create the progress bar
-	settings.progressBar = widget.NewProgressBar()
-	settings.progressBar.Hide()
+	uploadLogsUI.progressBar = widget.NewProgressBar()
+	uploadLogsUI.progressBar.Hide()
 
-	settings.uploadButton = widget.NewButton("Upload File", func() {
+	uploadLogsUI.uploadButton = widget.NewButton("Upload File", func() {
 		fmt.Println("Uploading file...")
-		settings.handleUpload()
+		uploadLogsUI.handleUpload()
 	})
 
-	settings.cancelButton = widget.NewButton("Cancel", func() {
-		settings.handleCancel()
+	uploadLogsUI.cancelButton = widget.NewButton("Cancel", func() {
+		uploadLogsUI.handleCancel()
 	})
-	settings.cancelButton.Disable()
+	uploadLogsUI.cancelButton.Disable()
 
-	settings.closeButton = widget.NewButton("Close", func() {
-		settings.handleClose()
+	uploadLogsUI.closeButton = widget.NewButton("Close", func() {
+		uploadLogsUI.handleClose()
 	})
 
 	buttonLayout := container.NewHBox(
-		settings.uploadButton,
-		settings.cancelButton,
-		settings.closeButton,
+		uploadLogsUI.uploadButton,
+		uploadLogsUI.cancelButton,
+		uploadLogsUI.closeButton,
 	)
 
-	settings.label = widget.NewLabel("Upload a file to the PPA")
+	uploadLogsUI.label = widget.NewLabel("Upload a file to the PPA")
 
 	// add the button and progress bar to the window
-	settingsLayout := container.NewVBox(buttonLayout, settings.label, settings.progressBar)
-	settings.popup = widget.NewModalPopUp(settingsLayout, a.ui.window.Canvas())
+	settingsLayout := container.NewVBox(
+		buttonLayout,
+		uploadLogsUI.label,
+		uploadLogsUI.progressBar,
+	)
 
-	return settings
+	uploadLogsUI.popup = widget.NewModalPopUp(settingsLayout, a.ui.window.Canvas())
+
+	return uploadLogsUI
 }

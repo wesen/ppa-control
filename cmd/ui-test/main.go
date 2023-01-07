@@ -21,9 +21,8 @@ var rootCmd = &cobra.Command{
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		appConfig := app2.NewAppConfigFromCommand(cmd)
 
-		app = &app2.App{
-			Config: appConfig,
-		}
+		app = app2.NewApp(appConfig)
+
 		err := app.InitLogger()
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize logger")
