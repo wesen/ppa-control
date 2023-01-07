@@ -8,12 +8,12 @@ import (
 	bucheron "github.com/wesen/bucheron/pkg"
 	"golang.org/x/sync/errgroup"
 	"os"
-	app2 "ppa-control/cmd/ui-test/app"
+	app2 "ppa-control/cmd/ui-test/ppa-app"
 	"ppa-control/lib/utils"
 	"time"
 )
 
-var app = &app2.App{}
+var ppaApp = &app2.App{}
 
 var rootCmd = &cobra.Command{
 	Use:   "ui",
@@ -21,9 +21,9 @@ var rootCmd = &cobra.Command{
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		appConfig := app2.NewAppConfigFromCommand(cmd)
 
-		app = app2.NewApp(appConfig)
+		ppaApp = app2.NewApp(appConfig)
 
-		err := app.InitLogger()
+		err := ppaApp.InitLogger()
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize logger")
 		}
@@ -40,7 +40,7 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		app.Run()
+		ppaApp.Run()
 	},
 }
 
@@ -69,7 +69,7 @@ var uploadCmd = &cobra.Command{
 		})
 
 		errGroup.Go(func() error {
-			return app.UploadLogs(ctx2, progressChannel)
+			return ppaApp.UploadLogs(ctx2, progressChannel)
 		})
 
 		err := errGroup.Wait()

@@ -1,4 +1,4 @@
-package app
+package ppa_app
 
 import (
 	"encoding/json"
