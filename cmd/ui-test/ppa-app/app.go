@@ -1,8 +1,9 @@
-package app
+package ppa_app
 
 import (
 	"context"
 	"fmt"
+	"fyne.io/fyne/v2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/shibukawa/configdir"
@@ -21,11 +22,29 @@ import (
 	"time"
 )
 
+type Preset struct {
+	Name        string `json:"name"`
+	PresetIndex int    `json:"index"`
+}
+
 type App struct {
-	Config      *AppConfig
-	LogsDir     string
-	MultiClient *client.MultiClient
-	ui          *UI
+	Config                *AppConfig
+	Presets               []*Preset
+	LogsDir               string
+	MultiClient           *client.MultiClient
+	ui                    *UI
+	presetButtonContainer *fyne.Container
+}
+
+func NewApp(config *AppConfig) *App {
+	app := &App{
+		Config: config,
+	}
+
+	app.resetPresets()
+	app.loadPresets()
+
+	return app
 }
 
 func (a *App) InitLogger() error {
@@ -109,22 +128,25 @@ func (a *App) UploadLogs(ctx context.Context, progressCh chan bucheron.ProgressE
 
 	files := []string{}
 
-	// gather all files in a.LogsDir
-	err = filepath.Walk(a.LogsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			files = append(files, path)
-		}
-		return nil
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to walk logs dir")
-	}
+	dirs := []string{a.LogsDir}
+	for _, folder := range a.Config.ConfigFolders.queryFolders {
+		dirs = append(dirs, folder.Path)
 
-	if a.Config.ConfigFolders.ConfigFile != "" {
-		files = append(files, a.Config.ConfigFolders.ConfigFile)
+	}
+	for _, dir := range dirs {
+		// gather all files in a.LogsDir
+		err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				files = append(files, path)
+			}
+			return nil
+		})
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to walk logs dir")
+		}
 	}
 
 	data := &bucheron.UploadData{
@@ -150,13 +172,11 @@ func (a *App) Run() {
 	discoveryCh := make(chan discovery.PeerInformation)
 
 	if a.Config.SaveConfig {
-		if a.Config.ConfigFolders.ConfigFile != "" {
-			configFilePath := a.Config.ConfigFolders.ConfigFile
-			log.Info().Str("path", configFilePath).Msg("Found config file")
-			err := a.Config.SaveToFile(configFilePath)
-			if err != nil {
-				log.Error().Err(err).Msgf("Failed to save config file to %s", configFilePath)
-			}
+		configFilePath := a.Config.GetConfigFilePath("config.json")
+		log.Info().Str("path", configFilePath).Msg("Found config file")
+		err := a.Config.SaveToFile(configFilePath)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to save config file to %s", configFilePath)
 		}
 	}
 

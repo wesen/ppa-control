@@ -1,4 +1,4 @@
-package app
+package ppa_app
 
 import (
 	"encoding/json"
@@ -15,19 +15,22 @@ const DEFAULT_COMPONENT_ID = 0xFF
 type AppConfigFolders struct {
 	configDirs   configdir.ConfigDir
 	queryFolders []*configdir.Config
-	ConfigFile   string
+}
+
+func (acf *AppConfigFolders) GetConfigFilePath(file string) string {
+	return path.Join(acf.queryFolders[0].Path, file)
 }
 
 func CreateAppConfigFolders() *AppConfigFolders {
 	acf := &AppConfigFolders{}
 	acf.configDirs = configdir.New("Hoffmann Audio", "ppa-control")
 	acf.queryFolders = acf.configDirs.QueryFolders(configdir.Global)
-	queryFolder := acf.configDirs.QueryFolderContainsFile("config.json")
-	if queryFolder != nil {
-		acf.ConfigFile = path.Join(queryFolder.Path, "config.json")
-	}
 
 	return acf
+}
+
+func (ac *AppConfig) GetConfigFilePath(file string) string {
+	return ac.ConfigFolders.GetConfigFilePath(file)
 }
 
 type AppConfig struct {
@@ -68,27 +71,30 @@ func NewAppConfig() *AppConfig {
 }
 
 func NewAppConfigFromFile(acf *AppConfigFolders) (*AppConfig, error) {
-	if acf.ConfigFile != "" {
-		log.Info().Str("path", acf.ConfigFile).Msg("Found config file")
-		f, err := os.Open(acf.ConfigFile)
-		if err != nil {
-			return nil, err
-		}
-		defer f.Close()
-		data, err := io.ReadAll(f)
-		if err != nil {
-			return nil, err
-		}
+	configFile := acf.GetConfigFilePath("config.json")
 
-		config := NewAppConfig()
-		err = json.Unmarshal(data, config)
-		if err != nil {
-			return nil, err
-		}
-		return config, nil
-	} else {
+	// check if file exists
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		return nil, nil
 	}
+
+	log.Info().Str("path", configFile).Msg("Found config file")
+	f, err := os.Open(configFile)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	config := NewAppConfig()
+	err = json.Unmarshal(data, config)
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
 }
 
 func AddAppConfigFlags(cmd *cobra.Command) {

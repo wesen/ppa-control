@@ -12,7 +12,7 @@ builds:
   - env:
       - CGO_ENABLED=0
     main: ./cmd/ppa-cli
-    binary: program
+    binary: ppa-cli
     goos:
       - linux
 # I am not able to test windows at the time
