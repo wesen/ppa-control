@@ -51,6 +51,15 @@ func (mc *MultiClient) SendPresetRecallByPresetIndex(index int) {
 	}
 }
 
+func (mc *MultiClient) SendMasterVolume(volume float32) {
+	mc.mutex.RLock()
+	defer mc.mutex.RUnlock()
+
+	for _, c := range mc.clients {
+		c.SendMasterVolume(volume)
+	}
+}
+
 func (mc *MultiClient) DoesClientExist(addr string) bool {
 	mc.mutex.RLock()
 	defer mc.mutex.RUnlock()

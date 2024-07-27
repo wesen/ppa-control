@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"github.com/augustoroman/hexdump"
 	"github.com/rs/zerolog"
@@ -24,6 +25,7 @@ type Client interface {
 	SendPresetRecallByPresetIndex(index int)
 	SendPing()
 	Name() string
+	SendMasterVolume(volume float32)
 }
 
 // A pkg has multiple target addresses, and no source address (?).
@@ -116,6 +118,53 @@ func (c *SingleDevice) SendPresetRecallByPresetIndex(index int) {
 		Str("interface", c.Interface).
 		Int("length", buf.Len()).
 		Msg("Sending preset recall")
+	c.SendChannel <- buf
+}
+
+func (c *SingleDevice) SendMasterVolume(volume float32) {
+	buf := new(bytes.Buffer)
+	bh := protocol.NewBasicHeader(
+		protocol.MessageTypeDeviceData,
+		protocol.StatusCommandClient,
+		[4]byte{0, 0, 0, 0},
+		c.seqCmd,
+		byte(c.ComponentId),
+	)
+	// volume = 1 -> 0dB
+	// volume = 0 -> -72dB
+
+	twentyDB := 0x3e8
+	minusEigthyDB := 0x00
+	gain := uint32(volume * float32(twentyDB-minusEigthyDB))
+
+	// TODO potentially need mutex here
+	c.seqCmd += 1
+
+	err := protocol.EncodeHeader(buf, bh)
+	if err != nil {
+		log.Warn().Str("error", err.Error()).Msg("Failed to encode header")
+		return
+	}
+
+	err = binary.Write(buf, binary.LittleEndian, []int8{01, 00, 03, 06})
+	if err != nil {
+		log.Warn().Str("error", err.Error()).Msg("Failed to encode header")
+		return
+	}
+
+	err = binary.Write(buf, binary.LittleEndian, gain)
+	if err != nil {
+		log.Warn().Str("error", err.Error()).Msg("Failed to encode header")
+		return
+	}
+
+	log.Debug().
+		Str("address", c.AddrPort).
+		Str("interface", c.Interface).
+		Int("length", buf.Len()).
+		Msg("Sending master volume")
+
+	fmt.Printf("%s\n", hexdump.Dump(buf.Bytes()[:buf.Len()]))
 	c.SendChannel <- buf
 }
 

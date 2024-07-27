@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/rs/zerolog/log"
+	"image/color"
+	"ppa-control/lib/utils/debouncer"
+	"time"
 )
 
 type UI struct {
@@ -117,26 +121,33 @@ func (a *App) BuildUI(cancel context.CancelFunc) *UI {
 		//controlButtonContainer,
 	)
 
-	//masterTitle := canvas.NewText("master", color.White)
-	//masterSlider := widget.NewSlider(0, 10)
-	//masterSlider.Step = 0.01
-	//masterSlider.Orientation = widget.Vertical
-	//masterSlider.MinSize()
-	//masterSlider.OnChanged = func(value float64) {
-	//	log.Info().Float64("volume", value).Msg("Master Volume")
-	//}
-	//sliderContainer := container.New(layout.NewBorderLayout(
-	//	//container.NewVBox(masterTitle, widget.NewSeparator()),
-	//	masterTitle,
-	//	nil, nil, nil),
-	//	masterTitle, masterSlider)
+	masterTitle := canvas.NewText("master", color.White)
+	masterSlider := widget.NewSlider(0, 1)
+	masterSlider.Step = 0.01
+	masterSlider.Orientation = widget.Vertical
+	masterSlider.MinSize()
 
-	//mainHBox := container.NewHBox(
-	//	mainGridContainer,
-	//	widget.NewSeparator(),
-	//	//sliderContainer,
-	//)
-	ui.window.SetContent(mainGridContainer) // This is fyneApp text entry field
+	masterDebouncer := debouncer.NewDebouncer(100 * time.Millisecond)
+
+	masterSlider.OnChanged = func(value float64) {
+		masterDebouncer.Run(func() {
+			log.Info().Float64("volume", value).Msg("Master Volume")
+			a.MultiClient.SendMasterVolume(float32(value))
+		})
+	}
+
+	sliderContainer := container.New(layout.NewBorderLayout(
+		//container.NewVBox(masterTitle, widget.NewSeparator()),
+		masterTitle,
+		nil, nil, nil),
+		masterTitle, masterSlider)
+
+	mainHBox := container.NewHBox(
+		mainGridContainer,
+		widget.NewSeparator(),
+		sliderContainer,
+	)
+	ui.window.SetContent(mainHBox) // This is fyneApp text entry field
 	//ui.window.Resize(fyne.NewSize(800, 800))
 
 	ui.window.SetOnClosed(func() {
