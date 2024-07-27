@@ -20,6 +20,16 @@ const (
 	MessageTypeUnknown      MessageType = 255
 )
 
+// IsMessageTypeUnknown returns true if the MessageType is not one of the defined types
+func IsMessageTypeUnknown(mt MessageType) bool {
+	switch mt {
+	case MessageTypePing, MessageTypeLiveCmd, MessageTypeDeviceData, MessageTypePresetRecall, MessageTypePresetSave:
+		return false
+	default:
+		return true
+	}
+}
+
 type StatusType uint16
 
 const (
@@ -34,6 +44,17 @@ const (
 	StatusErrorServer    StatusType = 0x0009
 	StatusWaitServer     StatusType = 0x0041
 )
+
+// IsStatusUnknown returns true if the StatusType is not one of the defined types
+func IsStatusUnknown(st StatusType) bool {
+	switch st {
+	case StatusCommandClient, StatusRequestClient, StatusResponseClient, StatusErrorClient, StatusWaitClient,
+		StatusCommandServer, StatusRequestServer, StatusResponseServer, StatusErrorServer, StatusWaitServer:
+		return false
+	default:
+		return true
+	}
+}
 
 type BasicHeader struct {
 	MessageType    MessageType
