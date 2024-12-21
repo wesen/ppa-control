@@ -54,6 +54,10 @@ func Index(state server.AppState) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			templ_7745c5c3_Err = DiscoverySection(state).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"card mt-4\"><div class=\"card-header\"><h5 class=\"card-title mb-0\">Commands</h5></div><div class=\"card-body\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -74,7 +78,7 @@ func Index(state server.AppState) templ.Component {
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(`{"preset": "%d"}`, i))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/ppa-web/templates/index.templ`, Line: 28, Col: 80}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/index.templ`, Line: 29, Col: 80}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -87,7 +91,7 @@ func Index(state server.AppState) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("Preset %d", i))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/ppa-web/templates/index.templ`, Line: 29, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/index.templ`, Line: 30, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -106,13 +110,13 @@ func Index(state server.AppState) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("</div></div></div></div><script>\n            document.getElementById('volume').addEventListener('input', function() {\n                document.getElementById('volume-value').textContent = this.value;\n            });\n\n            // Function to style console output\n            function logPacket(packet) {\n                const timestamp = `%c${packet.timestamp}%c`;\n                const direction = `%c${packet.direction}%c`;\n                const source = `%c${packet.source}%c → %c${packet.destination}%c`;\n                \n                // Styles\n                const timeStyle = \"color: #4361EE; font-weight: bold;\";\n                const resetStyle = \"color: inherit; font-weight: normal;\";\n                const directionStyle = \"color: #F72585; font-weight: bold; padding: 2px 6px; border-radius: 3px; background: rgba(247, 37, 133, 0.1);\";\n                const addressStyle = \"color: #666666;\";\n                \n                // Log the basic info with styling\n                console.log(\n                    `${timestamp} ${direction} ${source}`,\n                    timeStyle, resetStyle,\n                    directionStyle, resetStyle,\n                    addressStyle, resetStyle, addressStyle, resetStyle\n                );\n                \n                // Log the header if present\n                if (packet.header) {\n                    console.group('Header');\n                    console.log(packet.header);\n                    console.groupEnd();\n                }\n                \n                // Log the payload if present\n                if (packet.payload) {\n                    console.group('Payload');\n                    console.log(packet.payload);\n                    console.groupEnd();\n                }\n                \n                // Log the hex dump if present\n                if (packet.hexDump) {\n                    console.group('Hex Dump');\n                    console.log(`%c${packet.hexDump}`, \"color: #4361EE; font-family: monospace;\");\n                    console.groupEnd();\n                }\n                \n                console.log('\\n'); // Add some spacing between packets\n            }\n        </script>")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("</div></div></div></div><script>\n            document.getElementById('volume').addEventListener('input', function() {\n                const value = this.value;\n                document.getElementById('volume-value').textContent = value;\n                this.setAttribute('hx-vals', JSON.stringify({volume: value}));\n            });\n\n            // Function to style console output\n            function logPacket(packet) {\n                const timestamp = `%c${packet.timestamp}%c`;\n                const direction = `%c${packet.direction}%c`;\n                const source = `%c${packet.source}%c → %c${packet.destination}%c`;\n                \n                // Styles\n                const timeStyle = \"color: #4361EE; font-weight: bold;\";\n                const resetStyle = \"color: inherit; font-weight: normal;\";\n                const directionStyle = \"color: #F72585; font-weight: bold; padding: 2px 6px; border-radius: 3px; background: rgba(247, 37, 133, 0.1);\";\n                const addressStyle = \"color: #666666;\";\n                \n                // Log the basic info with styling\n                console.log(\n                    `${timestamp} ${direction} ${source}`,\n                    timeStyle, resetStyle,\n                    directionStyle, resetStyle,\n                    addressStyle, resetStyle, addressStyle, resetStyle\n                );\n                \n                // Log the header if present\n                if (packet.header) {\n                    console.group('Header');\n                    console.log(packet.header);\n                    console.groupEnd();\n                }\n                \n                // Log the payload if present\n                if (packet.payload) {\n                    console.group('Payload');\n                    console.log(packet.payload);\n                    console.groupEnd();\n                }\n                \n                // Log the hex dump if present\n                if (packet.hexDump) {\n                    console.group('Hex Dump');\n                    console.log(`%c${packet.hexDump}`, \"color: #4361EE; font-family: monospace;\");\n                    console.groupEnd();\n                }\n                \n                console.log('\\n'); // Add some spacing between packets\n            }\n        </script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return templ_7745c5c3_Err
 		})
-		templ_7745c5c3_Err = base("Home").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Base("Home").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -141,20 +145,20 @@ func IPForm(state server.AppState) templ.Component {
 			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"card\"><div class=\"card-header\"><h5 class=\"card-title mb-0\">Device Connection</h5></div><div class=\"card-body\"><form hx-post=\"/set-ip\" hx-target=\"this\" hx-swap=\"outerHTML\"><div class=\"mb-3\"><label for=\"ip\" class=\"form-label\">Destination IP</label> <input type=\"text\" class=\"form-control\" id=\"ip\" name=\"ip\" value=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("<div class=\"card\" id=\"ip-form\"><form hx-post=\"/set-ip\" hx-target=\"#ip-form\" hx-swap=\"outerHTML\"><div class=\"card-header\"><h5 class=\"card-title mb-0\">Device Connection</h5></div><div class=\"card-body\"><div class=\"mb-3\"><label for=\"ip\" class=\"form-label\">Destination IP</label> <input type=\"text\" class=\"form-control\" id=\"ip\" name=\"ip\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(state.DestIP)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/ppa-web/templates/index.templ`, Line: 122, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/index.templ`, Line: 127, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\" placeholder=\"Enter device IP address\"></div><button type=\"submit\" class=\"btn btn-primary\">Set IP</button></form>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("\" placeholder=\"Enter device IP address\"></div><button type=\"submit\" class=\"btn btn-primary\">Set IP</button> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -166,7 +170,7 @@ func IPForm(state server.AppState) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(state.DestIP)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/ppa-web/templates/index.templ`, Line: 129, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/index.templ`, Line: 133, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -177,7 +181,7 @@ func IPForm(state server.AppState) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("</div></div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString("</div></form></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -222,7 +226,7 @@ func StatusBar(state server.AppState) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var9).String())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/ppa-web/templates/index.templ`, Line: 1, Col: 0}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/index.templ`, Line: 1, Col: 0}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -235,7 +239,7 @@ func StatusBar(state server.AppState) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(state.Status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/ppa-web/templates/index.templ`, Line: 139, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/index.templ`, Line: 144, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -288,7 +292,7 @@ func LogWindow(state server.AppState) templ.Component {
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(line)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/ppa-web/templates/index.templ`, Line: 152, Col: 27}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `templates/index.templ`, Line: 157, Col: 27}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 				if templ_7745c5c3_Err != nil {

@@ -279,3 +279,18 @@ Improved code organization by extracting HTTP handlers into a dedicated Handler 
 - Added TemplateProvider interface to break circular dependencies
 - Improved separation of concerns between server and handler logic
 - Added proper interface abstractions for template rendering
+
+# Add Device Discovery UI
+
+Added a device discovery UI to the web interface that allows users to:
+- Start/stop device discovery
+- See discovered devices in real-time
+- Connect to discovered devices with one click
+- Monitor network interfaces
+
+## Changes
+- Added discovery section to web UI with SSE updates
+- Added device discovery state management to server
+- Added real-time device list updates
+- Added interface monitoring
+- Added discovery command-line flags

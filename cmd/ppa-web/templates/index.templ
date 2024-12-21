@@ -6,10 +6,11 @@ import (
 )
 
 templ Index(state server.AppState) {
-    @base("Home") {
+    @Base("Home") {
         <div class="row">
             <div class="col-md-6">
                 @IPForm(state)
+                @DiscoverySection(state)
                 
                 <div class="card mt-4">
                     <div class="card-header">
@@ -38,7 +39,6 @@ templ Index(state server.AppState) {
                                 hx-trigger="change"
                                 hx-target="#log-window"
                                 hx-swap="innerHTML"
-                                hx-vals='{"volume": ""}' 
                                 name="volume"/>
                             <div class="text-center" id="volume-value">50</div>
                         </div>

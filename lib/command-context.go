@@ -81,10 +81,31 @@ func (cc *CommandContext) RunInGroup(f func() error) {
 // SetupCommand initializes common command configuration and context
 func SetupCommand(cmd *cobra.Command) *CommandContext {
 	cfg := &CommandConfig{
-		Addresses:   cmd.Flag("addresses").Value.String(),
-		Discovery:   cmd.Flag("discover").Value.String() == "true",
-		ComponentID: uint(mustUint(cmd.Flag("componentId").Value.String())),
-		Port:        uint(mustUint(cmd.Flag("port").Value.String())),
+		Addresses:   "",
+		Discovery:   false,
+		ComponentID: 0,
+		Port:        0,
+	}
+
+	// Safely check and retrieve flag values
+	if addressFlag := cmd.Flag("addresses"); addressFlag != nil {
+		cfg.Addresses = addressFlag.Value.String()
+	}
+
+	if discoverFlag := cmd.Flag("discover"); discoverFlag != nil {
+		cfg.Discovery = discoverFlag.Value.String() == "true"
+	}
+
+	if componentIdFlag := cmd.Flag("componentId"); componentIdFlag != nil {
+		if val, err := strconv.ParseUint(componentIdFlag.Value.String(), 10, 64); err == nil {
+			cfg.ComponentID = uint(val)
+		}
+	}
+
+	if portFlag := cmd.Flag("port"); portFlag != nil {
+		if val, err := strconv.ParseUint(portFlag.Value.String(), 10, 64); err == nil {
+			cfg.Port = uint(val)
+		}
 	}
 
 	if cfg.Discovery {

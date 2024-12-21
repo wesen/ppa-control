@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"ppa-control/cmd/ppa-web/handler"
 	"ppa-control/cmd/ppa-web/server"
-	"ppa-control/cmd/ppa-web/templates"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -22,6 +22,9 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "debug", "Log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().BoolP("discover", "d", false, "Enable device discovery")
+	rootCmd.PersistentFlags().StringArray("interfaces", []string{}, "Interfaces to use for discovery")
+	rootCmd.PersistentFlags().UintP("port", "p", 5001, "Port to use for device communication")
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -33,8 +36,8 @@ func run(cmd *cobra.Command, args []string) error {
 	zerolog.SetGlobalLevel(level)
 
 	// Create server and handler
-	srv := server.NewServer()
-	handler := server.NewHandler(srv, templates.NewTemplateProvider())
+	srv := server.FromCobraCommand(cmd)
+	handler := handler.NewHandler(srv)
 
 	// Serve static files
 	fs := http.FileServer(http.Dir("cmd/ppa-web/static"))
@@ -46,6 +49,9 @@ func run(cmd *cobra.Command, args []string) error {
 	http.HandleFunc("/set-ip", handler.HandleSetIP)
 	http.HandleFunc("/recall", handler.HandleRecall)
 	http.HandleFunc("/volume", handler.HandleVolume)
+	http.HandleFunc("/discovery/start", handler.HandleStartDiscovery)
+	http.HandleFunc("/discovery/stop", handler.HandleStopDiscovery)
+	http.HandleFunc("/discovery/events", handler.HandleDiscoveryEvents)
 
 	port := os.Getenv("PORT")
 	if port == "" {

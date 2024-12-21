@@ -1,10 +1,22 @@
 package server
 
+import "time"
+
+// DeviceInfo holds information about a discovered device
+type DeviceInfo struct {
+	Address   string
+	Interface string
+	LastSeen  time.Time
+}
+
 // AppState represents the current state of the application
 type AppState struct {
-	DestIP string
-	Log    []string
-	Status string
+	DestIP            string
+	Log               []string
+	Status            string
+	DiscoveryEnabled  bool
+	DiscoveredDevices map[string]DeviceInfo // addr -> info
+	ActiveInterfaces  map[string]bool       // iface -> active
 }
 
 // PacketInfo represents a network packet with all its details
