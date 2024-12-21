@@ -1,6 +1,8 @@
 package client
 
-import "context"
+import (
+	"context"
+)
 
 // Commander defines the command-sending capabilities of a client
 type Commander interface {
@@ -14,4 +16,4 @@ type Client interface {
 	Commander
 	Run(ctx context.Context, receivedCh chan<- ReceivedMessage) error
 	Name() string
-} 
+}

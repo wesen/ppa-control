@@ -1,7 +1,7 @@
 package cmds
 
 import (
-	"ppa-control/lib/client"
+	"ppa-control/lib"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -13,7 +13,7 @@ var pingCmd = &cobra.Command{
 	Short: "SendPing one or multiple PPA servers",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Setup command context
-		cmdCtx := client.SetupCommand(cmd)
+		cmdCtx := lib.SetupCommand(cmd)
 		defer cmdCtx.Cancel()
 
 		// Setup multiclient

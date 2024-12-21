@@ -1,7 +1,7 @@
 package cmds
 
 import (
-	"ppa-control/lib/client"
+	"ppa-control/lib"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -17,7 +17,7 @@ var recallCmd = &cobra.Command{
 		loop, _ := cmd.PersistentFlags().GetBool("loop")
 
 		// Setup command context
-		cmdCtx := client.SetupCommand(cmd)
+		cmdCtx := lib.SetupCommand(cmd)
 		defer cmdCtx.Cancel()
 
 		// Setup multiclient
