@@ -13,7 +13,7 @@ type InterfaceName = string
 
 type InterfaceManager struct {
 	port       uint16
-	receivedCh *chan client.ReceivedMessage
+	receivedCh chan<- client.ReceivedMessage
 
 	// used to Wait for all clients to be done
 	wg sync.WaitGroup
@@ -26,7 +26,7 @@ type InterfaceManager struct {
 	waiting atomic.Bool
 }
 
-func NewInterfaceManager(port uint16, receivedCh *chan client.ReceivedMessage) *InterfaceManager {
+func NewInterfaceManager(port uint16, receivedCh chan<- client.ReceivedMessage) *InterfaceManager {
 	return &InterfaceManager{
 		clients:    make(map[InterfaceName]client.Client),
 		cancels:    make(map[InterfaceName]context.CancelFunc),

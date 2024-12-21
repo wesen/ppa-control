@@ -189,3 +189,76 @@ Enhanced timer handling and cleanup in the ping command to prevent resource leak
 - Added timer stop on context cancellation
 - Added timer cleanup before channel processing
 - Improved resource management in ping loop
+
+# Add Volume Control Command
+
+Added a new volume control command to the CLI that allows setting master volume levels on PPA devices:
+- Volume range from 0.0 to 1.0 (maps to -72dB to +20dB)
+- Support for multiple devices via discovery or direct addressing
+- Optional continuous volume updates with loop mode
+- Immediate volume application to newly discovered devices
+
+## Changes
+- Implemented volume command in cmd/ppa-cli/cmds/volume.go
+- Added volume level validation
+- Added loop mode for continuous volume updates
+- Added proper timer and context cancellation handling
+- Added volume command documentation
+
+# Refactor CLI Commands for Better Code Organization
+
+Improved code organization and reliability of CLI commands by extracting common functionality:
+- Created shared command setup and execution infrastructure
+- Unified discovery and multiclient handling
+- Standardized error handling and context cancellation
+- Improved resource cleanup across all commands
+
+## Changes
+- Added common.go with shared command functionality
+- Refactored ping, recall, and volume commands to use common code
+- Improved timer cleanup and context cancellation
+- Added consistent error handling patterns
+- Standardized command initialization and cleanup
+
+# Improve Command Context Management
+
+Enhanced command context management with a new CommandContext type:
+- Added CommandContext struct to encapsulate command state and resources
+- Added idiomatic methods for context and resource management
+- Improved error handling and cleanup patterns
+- Simplified command implementation with better abstraction
+
+## Changes
+- Added CommandContext type with resource management methods
+- Refactored commands to use the new CommandContext
+- Added proper cleanup and error handling methods
+- Improved code readability and maintainability
+- Added consistent context access patterns
+
+# Client Architecture Documentation
+
+Added comprehensive documentation explaining the client architecture, including single device clients, multi-client management, and the discovery system. This documentation helps developers understand the system's components and their interactions.
+
+- Added `lib/client/client.md` with detailed explanations of client components
+- Documented channel handling and lifecycle management
+- Added code snippets and best practices
+
+# Improve Client Interface Design
+
+Enhanced the client interface design for better separation of concerns and more idiomatic Go:
+
+- Split Client interface into Commander and Client interfaces
+- Fixed channel ownership and direction in interfaces
+- Updated channel types to use send-only channels where appropriate
+- Improved code organization with dedicated interface file
+
+# Improve Error Handling in Client Package
+
+Enhanced error handling across the client package for better reliability and debugging:
+
+- Added custom error types for domain-specific errors
+- Replaced panics with proper error handling
+- Added error propagation through error channels
+- Added safe command execution with panic recovery
+- Improved error logging and context
+- Added proper error handling for client lifecycle operations

@@ -3,10 +3,11 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"go.uber.org/atomic"
 	"strings"
 	"sync"
+
+	"github.com/rs/zerolog/log"
+	"go.uber.org/atomic"
 )
 
 type MultiClient struct {
@@ -19,6 +20,7 @@ type MultiClient struct {
 	cancels map[string]context.CancelFunc
 
 	receivedCh chan ReceivedMessage
+	errorCh    chan error // Channel for error propagation
 
 	waiting atomic.Bool
 }
@@ -29,16 +31,20 @@ func NewMultiClient(name string) *MultiClient {
 		clients:    make(map[string]Client),
 		cancels:    make(map[string]context.CancelFunc),
 		receivedCh: make(chan ReceivedMessage, 10),
+		errorCh:    make(chan error, 10), // Buffer for errors
 		waiting:    *atomic.NewBool(false),
 	}
 }
 
+// Commander interface implementation
 func (mc *MultiClient) SendPing() {
 	mc.mutex.RLock()
 	defer mc.mutex.RUnlock()
 
-	for _, c := range mc.clients {
-		c.SendPing()
+	for addr, c := range mc.clients {
+		if err := mc.safeSend(addr, c.SendPing); err != nil {
+			log.Error().Err(err).Str("addr", addr).Msg("failed to send ping")
+		}
 	}
 }
 
@@ -46,8 +52,10 @@ func (mc *MultiClient) SendPresetRecallByPresetIndex(index int) {
 	mc.mutex.RLock()
 	defer mc.mutex.RUnlock()
 
-	for _, c := range mc.clients {
-		c.SendPresetRecallByPresetIndex(index)
+	for addr, c := range mc.clients {
+		if err := mc.safeSend(addr, func() { c.SendPresetRecallByPresetIndex(index) }); err != nil {
+			log.Error().Err(err).Str("addr", addr).Msg("failed to send preset recall")
+		}
 	}
 }
 
@@ -55,9 +63,23 @@ func (mc *MultiClient) SendMasterVolume(volume float32) {
 	mc.mutex.RLock()
 	defer mc.mutex.RUnlock()
 
-	for _, c := range mc.clients {
-		c.SendMasterVolume(volume)
+	for addr, c := range mc.clients {
+		if err := mc.safeSend(addr, func() { c.SendMasterVolume(volume) }); err != nil {
+			log.Error().Err(err).Str("addr", addr).Msg("failed to send master volume")
+		}
 	}
+}
+
+// safeSend executes a send operation safely and returns any error
+func (mc *MultiClient) safeSend(addr string, fn func()) error {
+	defer func() {
+		if r := recover(); r != nil {
+			err := fmt.Errorf("panic in send operation: %v", r)
+			mc.errorCh <- NewClientError("send", addr, err)
+		}
+	}()
+	fn()
+	return nil
 }
 
 func (mc *MultiClient) DoesClientExist(addr string) bool {
@@ -70,21 +92,17 @@ func (mc *MultiClient) DoesClientExist(addr string) bool {
 
 func (mc *MultiClient) AddClient(ctx context.Context, addrPort string, iface string, componentId uint) (Client, error) {
 	if mc.waiting.Load() {
-		panic("cannot add pkg while waiting for clients to be done")
+		return nil, &ErrClientBusy{Operation: "shutdown"}
 	}
 
 	log.Debug().
 		Str("name", mc.name).
 		Str("iface", iface).
 		Str("addrPort", addrPort).
-		Msg("adding pkg")
+		Msg("adding client")
+
 	if mc.DoesClientExist(addrPort) {
-		log.Error().
-			Str("name", mc.name).
-			Str("iface", iface).
-			Str("addrPort", addrPort).
-			Msg("pkg already exists")
-		return nil, fmt.Errorf("pkg for %s already exists", addrPort)
+		return nil, &ErrClientExists{Addr: addrPort}
 	}
 
 	c := NewSingleDevice(addrPort, iface, componentId)
@@ -98,13 +116,29 @@ func (mc *MultiClient) AddClient(ctx context.Context, addrPort string, iface str
 
 	mc.wg.Add(1)
 	go func() {
+		defer mc.wg.Done()
 
 		log.Info().
 			Str("name", mc.name).
 			Str("iface", iface).
 			Str("addrPort", addrPort).
-			Msg("starting pkg")
-		err := c.Run(clientCtx, &mc.receivedCh)
+			Msg("starting client")
+
+		if err := c.Run(clientCtx, mc.receivedCh); err != nil {
+			mc.errorCh <- NewClientError("run", addrPort, err)
+			log.Error().
+				Str("name", mc.name).
+				Str("iface", iface).
+				Str("addrPort", addrPort).
+				Err(err).
+				Msg("client stopped with error")
+		} else {
+			log.Info().
+				Str("name", mc.name).
+				Str("iface", iface).
+				Str("addrPort", addrPort).
+				Msg("client stopped")
+		}
 
 		func() {
 			mc.mutex.Lock()
@@ -112,22 +146,6 @@ func (mc *MultiClient) AddClient(ctx context.Context, addrPort string, iface str
 			delete(mc.clients, addrPort)
 			delete(mc.cancels, addrPort)
 		}()
-
-		mc.wg.Done()
-		if err != nil {
-			log.Error().
-				Str("name", mc.name).
-				Str("iface", iface).
-				Str("addrPort", addrPort).
-				Err(err).
-				Msg("pkg stopped with error")
-		} else {
-			log.Info().
-				Str("name", mc.name).
-				Str("iface", iface).
-				Str("addrPort", addrPort).
-				Msg("pkg stopped")
-		}
 	}()
 
 	return c, nil
@@ -135,33 +153,45 @@ func (mc *MultiClient) AddClient(ctx context.Context, addrPort string, iface str
 
 func (mc *MultiClient) CancelClient(addr string) error {
 	if mc.waiting.Load() {
-		panic("cannot remove pkg while waiting for clients to be done")
+		return &ErrClientBusy{Operation: "shutdown"}
 	}
 
 	log.Debug().
 		Str("name", mc.name).
 		Str("addr", addr).
-		Msg("adding pkg")
+		Msg("cancelling client")
+
 	if !mc.DoesClientExist(addr) {
-		log.Error().
-			Str("name", mc.name).
-			Str("addr", addr).
-			Msg("pkg does not exist")
-		return fmt.Errorf("pkg for %s does not exist", addr)
+		return &ErrClientNotFound{Addr: addr}
 	}
 
 	mc.mutex.Lock()
 	defer mc.mutex.Unlock()
-	mc.cancels[addr]()
 
-	return nil
+	if cancel, exists := mc.cancels[addr]; exists {
+		cancel()
+		return nil
+	}
+	return &ErrClientNotFound{Addr: addr}
 }
 
-func (mc *MultiClient) Run(ctx context.Context, receivedCh *chan ReceivedMessage) (err error) {
+func (mc *MultiClient) Run(ctx context.Context, receivedCh chan<- ReceivedMessage) (err error) {
+	// Error handling goroutine
+	go func() {
+		for err := range mc.errorCh {
+			log.Error().Err(err).Msg("client error received")
+			// Could add error handling strategy here
+		}
+	}()
+
 	for {
 		select {
 		case m := <-mc.receivedCh:
-			*receivedCh <- m
+			select {
+			case receivedCh <- m:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 
 		case <-ctx.Done():
 			log.Debug().
@@ -179,14 +209,11 @@ func (mc *MultiClient) Run(ctx context.Context, receivedCh *chan ReceivedMessage
 			}()
 
 			mc.wg.Wait()
+			close(mc.errorCh) // Close error channel after all clients are done
+
 			log.Debug().
 				Str("name", mc.name).
 				Msg("multiclient stopped")
-
-			// do I need to drain channels here?
-			// All clients have been closed at this point, so no one is writing
-			// to receivedCh, and if I close the channel with things buffered, and I'm the only
-			// receiver, then things are fine too, I think.
 
 			return ctx.Err()
 		}

@@ -2,10 +2,11 @@ package discovery
 
 import (
 	"context"
-	"github.com/rs/zerolog/log"
-	"golang.org/x/sync/errgroup"
 	"ppa-control/lib/client"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 )
 
 type PeerInformation interface {
@@ -45,7 +46,7 @@ func Discover(
 	port uint16) error {
 	receivedCh := make(chan client.ReceivedMessage)
 
-	interfaceManager := NewInterfaceManager(port, &receivedCh)
+	interfaceManager := NewInterfaceManager(port, receivedCh)
 	interfaceDiscoverer := NewInterfaceDiscoverer(interfaceManager, discoveryInterfaces)
 
 	// start the discoverer:

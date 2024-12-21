@@ -1,120 +1,87 @@
 package cmds
 
 import (
-	"context"
+	"time"
+
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
-	"ppa-control/lib/client"
-	"ppa-control/lib/client/discovery"
-	"strings"
-	"time"
 )
 
 var recallCmd = &cobra.Command{
 	Use:   "recall",
 	Short: "Recall a preset by index",
 	Run: func(cmd *cobra.Command, args []string) {
-		addresses, _ := cmd.PersistentFlags().GetString("addresses")
-		discovery_, _ := cmd.PersistentFlags().GetBool("discover")
-		//loop, _ := cmd.PersistentFlags().GetBool("loop")
-		componentId, _ := cmd.PersistentFlags().GetUint("componentId")
+		// Get command-specific flags
 		preset, _ := cmd.PersistentFlags().GetInt("preset")
+		loop, _ := cmd.PersistentFlags().GetBool("loop")
 
-		port, _ := cmd.PersistentFlags().GetUint("port")
+		// Setup command context
+		cmdCtx := SetupCommand(cmd)
+		defer cmdCtx.Cancel()
 
-		ctx := context.Background()
-		grp, ctx := errgroup.WithContext(ctx)
-
-		discoveryCh := make(chan discovery.PeerInformation)
-		receivedCh := make(chan client.ReceivedMessage)
-
-		multiClient := client.NewMultiClient("recall")
-		for _, addr := range strings.Split(addresses, ",") {
-			if addr == "" {
-				continue
-			}
-			// TODO allow passing in the interface name for a pkg, here
-			_, err := multiClient.AddClient(ctx, addr, "", componentId)
-			if err != nil {
-				log.Fatal().Err(err).Msg("failed to add pkg")
-			}
+		// Setup multiclient
+		if err := cmdCtx.SetupMultiClient("recall"); err != nil {
+			log.Fatal().Err(err).Msg("Failed to setup multiclient")
+			return
 		}
 
-		if discovery_ {
-			grp.Go(func() error {
-				return discovery.Discover(ctx, discoveryCh, nil, uint16(port))
-			})
-		}
+		// Setup discovery if enabled
+		cmdCtx.SetupDiscovery()
 
-		grp.Go(func() error {
-			return multiClient.Run(ctx, &receivedCh)
-		})
+		// Start multiclient
+		cmdCtx.StartMultiClient()
 
-		grp.Go(func() error {
-			// TODO we do need to wait for this to have made it at least out of the socket
-			multiClient.SendPresetRecallByPresetIndex(preset)
+		// Main command loop
+		cmdCtx.RunInGroup(func() error {
+			// Send initial recall
+			cmdCtx.GetMultiClient().SendPresetRecallByPresetIndex(preset)
 
-			preset = (preset + 1) % 5
+			// If not looping, just wait for context cancellation
+			if !loop {
+				<-cmdCtx.Context().Done()
+				return cmdCtx.Context().Err()
+			}
 
 			for {
-				t := time.NewTicker(5 * time.Second)
+				t := time.NewTimer(5 * time.Second)
+
 				select {
-				case <-ctx.Done():
-					return ctx.Err()
+				case <-cmdCtx.Context().Done():
+					t.Stop()
+					return cmdCtx.Context().Err()
 
-				case msg := <-discoveryCh:
-					log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
-					switch msg.(type) {
-					case discovery.PeerDiscovered:
-						log.Info().
-							Str("addr", msg.GetAddress()).
-							Str("iface", msg.GetInterface()).
-							Msg("peer discovered")
-						c, err := multiClient.AddClient(ctx, msg.GetAddress(), msg.GetInterface(), componentId)
-						if err != nil {
-							log.Error().Err(err).Msg("failed to add pkg")
-							return err
-						}
-						// immediately send preset recall on discovery
-						c.SendPresetRecallByPresetIndex(preset)
-					case discovery.PeerLost:
-						log.Info().
-							Str("addr", msg.GetAddress()).
-							Str("iface", msg.GetInterface()).
-							Msg("peer lost")
-						err := multiClient.CancelClient(msg.GetAddress())
-						if err != nil {
-							log.Error().Err(err).Msg("failed to remove pkg")
-							return err
-						}
-					}
+				case <-t.C:
+					cmdCtx.GetMultiClient().SendPresetRecallByPresetIndex(preset)
 
-				case msg := <-receivedCh:
+				case msg := <-cmdCtx.Channels.ReceivedCh:
+					t.Stop()
 					if msg.Header != nil {
 						log.Info().Str("from", msg.RemoteAddress.String()).
-							Str("type", msg.Header.MessageType.String()).
 							Str("pkg", msg.Client.Name()).
+							Str("type", msg.Header.MessageType.String()).
 							Str("status", msg.Header.Status.String()).
 							Msg("received message")
 					} else {
-						log.Debug().
-							Str("from", msg.RemoteAddress.String()).
+						log.Debug().Str("from", msg.RemoteAddress.String()).
 							Str("pkg", msg.Client.Name()).
 							Msg("received unknown message")
 					}
 
-				case <-t.C:
-					multiClient.SendPresetRecallByPresetIndex(preset)
+				case msg := <-cmdCtx.Channels.DiscoveryCh:
+					t.Stop()
+					log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
+					if newClient, err := cmdCtx.HandleDiscoveryMessage(msg); err != nil {
+						return err
+					} else if newClient != nil {
+						// Send recall immediately to newly discovered client
+						newClient.SendPresetRecallByPresetIndex(preset)
+					}
 				}
 			}
 		})
 
-		err := grp.Wait()
-		if err != nil {
-			log.Error().Err(err).Msg("Error running multiclient")
-			return
-		}
+		// Wait for completion
+		cmdCtx.Wait()
 	},
 }
 
@@ -123,7 +90,7 @@ func init() {
 
 	recallCmd.PersistentFlags().StringP(
 		"addresses", "a", "",
-		"Addresses to ping, comma separated",
+		"Addresses to recall on, comma separated",
 	)
 	recallCmd.PersistentFlags().BoolP(
 		"discover", "d", true,
@@ -133,12 +100,20 @@ func init() {
 		"loop", "l", true,
 		"Send recalls in a loop",
 	)
+	recallCmd.PersistentFlags().StringArray(
+		"interfaces", []string{},
+		"Interfaces to use for discovery",
+	)
 	recallCmd.PersistentFlags().UintP(
 		"componentId", "c", 0xFF,
-		"Component ID to use for devices")
+		"Component ID to use for devices",
+	)
 	recallCmd.PersistentFlags().IntP(
 		"preset", "", 0,
-		"Preset to recall")
-
-	recallCmd.PersistentFlags().UintP("port", "p", 5001, "Port to ping on")
+		"Preset to recall",
+	)
+	recallCmd.PersistentFlags().UintP(
+		"port", "p", 5001,
+		"Port to use",
+	)
 }

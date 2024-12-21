@@ -5,28 +5,21 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/augustoroman/hexdump"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"golang.org/x/sync/errgroup"
 	"net"
 	"os"
 	"ppa-control/lib/protocol"
 	"ppa-control/lib/utils"
 	"syscall"
 	"time"
+
+	"github.com/augustoroman/hexdump"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 )
 
 const MaxBufferSize = 1024
 const Timeout = 10 * time.Second
-
-type Client interface {
-	Run(ctx context.Context, c *chan ReceivedMessage) error
-	SendPresetRecallByPresetIndex(index int)
-	SendPing()
-	Name() string
-	SendMasterVolume(volume float32)
-}
 
 // A pkg has multiple target addresses, and no source address (?).
 //That actually won't work either, will it...
@@ -168,10 +161,10 @@ func (c *SingleDevice) SendMasterVolume(volume float32) {
 	c.SendChannel <- buf
 }
 
-// Run is the main loop for the pkg.  It will listen for messages on the sendChannel
+// Run is the main loop for the client. It will listen for messages on the sendChannel
 // and emit them on the UDP socket, and it will listen for incoming packets on the UDP socket,
 // parse them and emit them on the receiveChannel.
-func (c *SingleDevice) Run(ctx context.Context, receivedCh *chan ReceivedMessage) (err error) {
+func (c *SingleDevice) Run(ctx context.Context, receivedCh chan<- ReceivedMessage) (err error) {
 	raddr, err := net.ResolveUDPAddr("udp", c.AddrPort)
 	if err != nil {
 		return
@@ -243,7 +236,7 @@ func (c *SingleDevice) sendLoop(ctx context.Context, conn net.PacketConn, raddr 
 	}
 }
 
-func (c *SingleDevice) readLoop(ctx context.Context, conn net.PacketConn, receivedCh *chan ReceivedMessage) error {
+func (c *SingleDevice) readLoop(ctx context.Context, conn net.PacketConn, receivedCh chan<- ReceivedMessage) error {
 	defer func() {
 		log.Info().
 			Str("address", conn.LocalAddr().String()).
@@ -310,7 +303,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn net.PacketConn, receiv
 				Msg("Could not decode incoming message")
 
 			if receivedCh != nil {
-				*receivedCh <- ReceivedMessage{
+				receivedCh <- ReceivedMessage{
 					Header:        nil,
 					Interface:     c.Interface,
 					RemoteAddress: addr,
@@ -325,7 +318,7 @@ func (c *SingleDevice) readLoop(ctx context.Context, conn net.PacketConn, receiv
 		// TODO parse body further
 
 		if receivedCh != nil {
-			*receivedCh <- ReceivedMessage{
+			receivedCh <- ReceivedMessage{
 				Header:        hdr,
 				RemoteAddress: addr,
 				Interface:     c.Interface,
