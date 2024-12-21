@@ -3,3 +3,5 @@ fyne-cross/
 *.app
 captures/
 dist/
+
+.history/
