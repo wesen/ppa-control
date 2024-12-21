@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
@@ -18,6 +19,7 @@ func init() {
 	rootCmd.Flags().Bool("print-hexdump", false, "Print hexdump")
 	rootCmd.Flags().String("interface", "", "Network interface to capture packets from")
 	rootCmd.Flags().Int("timeout", 0, "Capture timeout in seconds (0 for unlimited)")
+	rootCmd.Flags().String("output-format", "text", "Output format (text, json, jsonl, yaml). json=array, jsonl=one object per line")
 }
 
 func main() {
@@ -32,8 +34,9 @@ func run(cmd *cobra.Command, args []string) {
 	printHexdump, _ := cmd.Flags().GetBool("print-hexdump")
 	interfaceName, _ := cmd.Flags().GetString("interface")
 	captureTimeout, _ := cmd.Flags().GetInt("timeout")
+	outputFormat, _ := cmd.Flags().GetString("output-format")
 
-	handler := NewPacketHandler(printPackets, printHexdump, captureTimeout)
+	handler := NewPacketHandler(printPackets, printHexdump, captureTimeout, outputFormat)
 
 	if interfaceName != "" {
 		handler.CapturePackets(interfaceName)

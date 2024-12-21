@@ -52,3 +52,29 @@ Added styled terminal output using lipgloss to improve readability and visual or
 - Added message direction indication (Device → Client or Client → Device)
 - Enhanced visual hierarchy with bold and italic styles for different fields
 - Improved readability of hexdump output with distinct styling
+
+# Add JSON/YAML Output to pcap Tool
+
+Added JSON and YAML output formats to the pcap packet capture tool to support machine-readable output formats.
+
+- Added --output-format flag to select between text, json, and yaml output
+- Added structured PacketData type for consistent output formatting
+- Refactored packet handler to use common data structure for all output formats
+- Maintained backward compatibility with existing text output format
+
+# Improve JSON/YAML Output Formats
+
+Enhanced JSON and YAML output formats to better support streaming and multiple documents.
+
+- Changed JSON output to use JSON Lines (JSONL) format for better streaming support
+- Added YAML document separators (---) between packet entries
+- Removed pretty-printing indentation from JSON for more compact output
+
+# Add Separate JSON and JSONL Output Formats
+
+Added distinct JSON array and JSON Lines output formats for different use cases.
+
+- Added separate 'json' and 'jsonl' output formats
+- JSON format outputs a properly formatted array of all packets
+- JSONL format outputs one JSON object per line for streaming
+- Updated command-line help to clarify the difference between formats
