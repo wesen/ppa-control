@@ -262,3 +262,20 @@ Enhanced error handling across the client package for better reliability and deb
 - Added safe command execution with panic recovery
 - Improved error logging and context
 - Added proper error handling for client lifecycle operations
+
+# Refactor Web Server to Use CommandContext
+
+The web server has been refactored to use the common CommandContext functionality instead of reimplementing its own client management. This improves code reuse and consistency across the codebase.
+
+- Added FromCobraCommand constructor to create server from cobra commands
+- Added normal constructor for direct use from ppa-web
+- Added SetupContext and GetMultiClient methods to CommandContext
+- Refactored Server struct to use CommandContext for all client operations
+
+# Extract Web Server Handler
+
+Improved code organization by extracting HTTP handlers into a dedicated Handler struct:
+- Created Handler struct to encapsulate all HTTP handlers
+- Added TemplateProvider interface to break circular dependencies
+- Improved separation of concerns between server and handler logic
+- Added proper interface abstractions for template rendering

@@ -5,33 +5,62 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"ppa-control/lib"
 	"ppa-control/lib/client"
 	"sync"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 // Server represents the web server and manages the application state
 type Server struct {
 	state     AppState
 	mu        sync.RWMutex
-	client    *client.MultiClient
-	ctx       context.Context
-	cancel    context.CancelFunc
+	cmdCtx    *lib.CommandContext
 	receiveCh chan client.ReceivedMessage
 }
 
-// NewServer creates a new server instance
+// NewServer creates a new server instance for direct use
 func NewServer() *Server {
-	ctx, cancel := context.WithCancel(context.Background())
+	cmdCtx := &lib.CommandContext{
+		Config: &lib.CommandConfig{
+			ComponentID: 0xFF,
+			Port:        5001,
+		},
+		Channels: &lib.CommandChannels{
+			ReceivedCh: make(chan client.ReceivedMessage),
+		},
+	}
+
+	// Setup context with cancellation
+	ctx := context.Background()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	cmdCtx.SetupContext(ctx, cancelFunc)
+
 	return &Server{
 		state: AppState{
 			DestIP: "",
 			Log:    make([]string, 0),
 			Status: "Disconnected",
 		},
-		ctx:       ctx,
-		cancel:    cancel,
-		receiveCh: make(chan client.ReceivedMessage),
+		cmdCtx:    cmdCtx,
+		receiveCh: cmdCtx.Channels.ReceivedCh,
+	}
+}
+
+// FromCobraCommand creates a new server instance from a cobra command
+func FromCobraCommand(cmd *cobra.Command) *Server {
+	cmdCtx := lib.SetupCommand(cmd)
+
+	return &Server{
+		state: AppState{
+			DestIP: "",
+			Log:    make([]string, 0),
+			Status: "Disconnected",
+		},
+		cmdCtx:    cmdCtx,
+		receiveCh: cmdCtx.Channels.ReceivedCh,
 	}
 }
 
@@ -81,25 +110,26 @@ func (s *Server) SetState(fn func(*AppState)) {
 
 // ConnectToDevice establishes a connection to a PPA device
 func (s *Server) ConnectToDevice(addr string) error {
-	if s.client != nil {
-		s.cancel()
-		s.client = nil
+	if s.cmdCtx.GetMultiClient() != nil {
+		s.cmdCtx.Cancel()
 	}
 
-	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.client = client.NewMultiClient("web")
+	// Create new context and setup multiclient
+	ctx := context.Background()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	s.cmdCtx.SetupContext(ctx, cancelFunc)
 
-	c, err := s.client.AddClient(s.ctx, fmt.Sprintf("%s:%d", addr, 5001), "", 0xFF)
+	if err := s.cmdCtx.SetupMultiClient("web"); err != nil {
+		return fmt.Errorf("failed to setup client: %w", err)
+	}
+
+	c, err := s.cmdCtx.GetMultiClient().AddClient(ctx, fmt.Sprintf("%s:%d", addr, s.cmdCtx.Config.Port), "", s.cmdCtx.Config.ComponentID)
 	if err != nil {
 		return fmt.Errorf("failed to add client: %w", err)
 	}
 
 	// Start the client run loop
-	go func() {
-		if err := s.client.Run(s.ctx, &s.receiveCh); err != nil {
-			s.LogPacket("Client error: %v", err)
-		}
-	}()
+	s.cmdCtx.StartMultiClient()
 
 	// Start the ping loop
 	go func() {
@@ -108,7 +138,7 @@ func (s *Server) ConnectToDevice(addr string) error {
 
 		for {
 			select {
-			case <-s.ctx.Done():
+			case <-s.cmdCtx.Context().Done():
 				return
 			case <-ticker.C:
 				c.SendPing()
@@ -153,5 +183,5 @@ func (s *Server) ConnectToDevice(addr string) error {
 
 // IsConnected returns true if the server is connected to a device
 func (s *Server) IsConnected() bool {
-	return s.client != nil
+	return s.cmdCtx.GetMultiClient() != nil
 }

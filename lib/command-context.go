@@ -53,6 +53,18 @@ func (cc *CommandContext) Cancel() {
 	}
 }
 
+// SetupContext sets up the context and cancel function
+func (cc *CommandContext) SetupContext(ctx context.Context, cancelFunc context.CancelFunc) {
+	cc.ctx = ctx
+	cc.cancelFunc = cancelFunc
+	cc.group, cc.ctx = errgroup.WithContext(ctx)
+}
+
+// GetMultiClient returns the configured MultiClient
+func (cc *CommandContext) GetMultiClient() *client.MultiClient {
+	return cc.multiClient
+}
+
 // Wait waits for all goroutines to complete and returns any error
 func (cc *CommandContext) Wait() error {
 	err := cc.group.Wait()
@@ -93,38 +105,41 @@ func SetupCommand(cmd *cobra.Command) *CommandContext {
 	// Create error group
 	grp, ctx := errgroup.WithContext(ctx)
 
-	return &CommandContext{
+	cmdCtx := &CommandContext{
 		Config:     cfg,
 		Channels:   channels,
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
 		group:      grp,
 	}
+
+	return cmdCtx
 }
 
 // SetupMultiClient creates and configures a MultiClient with the given configuration
 func (cc *CommandContext) SetupMultiClient(name string) error {
-	multiClient := client.NewMultiClient(name)
+	cc.multiClient = client.NewMultiClient(name)
 
 	// Add clients for specified addresses
 	for _, addr := range strings.Split(cc.Config.Addresses, ",") {
 		if addr == "" {
 			continue
 		}
-		_, err := multiClient.AddClient(cc.ctx, fmt.Sprintf("%s:%d", addr, cc.Config.Port), "", cc.Config.ComponentID)
+		_, err := cc.multiClient.AddClient(cc.ctx, fmt.Sprintf("%s:%d", addr, cc.Config.Port), "", cc.Config.ComponentID)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to add client")
 			return err
 		}
 	}
 
-	cc.multiClient = multiClient
 	return nil
 }
 
-// GetMultiClient returns the configured MultiClient
-func (cc *CommandContext) GetMultiClient() *client.MultiClient {
-	return cc.multiClient
+// StartMultiClient starts the MultiClient in the error group
+func (cc *CommandContext) StartMultiClient() {
+	cc.group.Go(func() error {
+		return cc.multiClient.Run(cc.ctx, cc.Channels.ReceivedCh)
+	})
 }
 
 // SetupDiscovery starts the discovery process if enabled
@@ -134,13 +149,6 @@ func (cc *CommandContext) SetupDiscovery() {
 			return discovery.Discover(cc.ctx, cc.Channels.DiscoveryCh, cc.Config.Interfaces, uint16(cc.Config.Port))
 		})
 	}
-}
-
-// StartMultiClient starts the MultiClient in the error group
-func (cc *CommandContext) StartMultiClient() {
-	cc.group.Go(func() error {
-		return cc.multiClient.Run(cc.ctx, cc.Channels.ReceivedCh)
-	})
 }
 
 // HandleDiscoveryMessage processes discovery messages and updates the MultiClient accordingly
