@@ -3,15 +3,16 @@ package cmds
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
 	"os"
 	"os/signal"
 	"ppa-control/lib/client"
 	"ppa-control/lib/client/discovery"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 // You can create virtual ethernet interfaces on linux using the `dummy` driver
@@ -80,12 +81,14 @@ var pingCmd = &cobra.Command{
 
 				select {
 				case <-ctx.Done():
+					t.Stop()
 					return ctx.Err()
 
 				case <-t.C:
 					multiClient.SendPing()
 
 				case msg := <-receivedCh:
+					t.Stop()
 					if msg.Header != nil {
 						log.Info().Str("from", msg.RemoteAddress.String()).
 							Str("pkg", msg.Client.Name()).
@@ -100,6 +103,7 @@ var pingCmd = &cobra.Command{
 
 				// this won't trigger if the discovery loop is not running
 				case msg := <-discoveryCh:
+					t.Stop()
 					log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
 					switch msg.(type) {
 					case discovery.PeerDiscovered:

@@ -1,13 +1,13 @@
 package protocol
 
-//go:generate stringer -type=MessageType
-//go:generate stringer -type=StatusType
-
 import (
 	"bytes"
 	"encoding/binary"
 	"io"
 )
+
+//go:generate go run golang.org/x/tools/cmd/stringer -type=MessageType
+//go:generate go run golang.org/x/tools/cmd/stringer -type=StatusType
 
 type MessageType byte
 

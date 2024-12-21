@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebMIDI Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .midi-port {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .midi-message {
+            font-family: monospace;
+            margin: 2px 0;
+        }
+        #midi-log {
+            height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>WebMIDI Test</h1>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">MIDI Ports</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="midi-ports">
+                            <div class="alert alert-info">Initializing WebMIDI...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">MIDI Log</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="midi-log"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize WebMIDI
+        if (navigator.requestMIDIAccess) {
+            navigator.requestMIDIAccess({ sysex: false })
+                .then(onMIDISuccess, onMIDIFailure);
+        } else {
+            document.getElementById('midi-ports').innerHTML = 
+                '<div class="alert alert-danger">WebMIDI is not supported in this browser</div>';
+        }
+
+        function onMIDISuccess(midiAccess) {
+            const portsDiv = document.getElementById('midi-ports');
+            const inputs = midiAccess.inputs.values();
+            const outputs = midiAccess.outputs.values();
+            
+            let portsHTML = '<h6>Inputs:</h6>';
+            
+            // List inputs
+            for (let input of inputs) {
+                portsHTML += `
+                    <div class="midi-port">
+                        <strong>${input.name}</strong> (${input.manufacturer})
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" 
+                                   id="input-${input.id}" onchange="toggleInput('${input.id}')">
+                            <label class="form-check-label" for="input-${input.id}">
+                                Enable monitoring
+                            </label>
+                        </div>
+                    </div>`;
+                
+                // Set up input monitoring
+                input.onmidimessage = onMIDIMessage;
+            }
+            
+            portsHTML += '<h6 class="mt-3">Outputs:</h6>';
+            
+            // List outputs
+            for (let output of outputs) {
+                portsHTML += `
+                    <div class="midi-port">
+                        <strong>${output.name}</strong> (${output.manufacturer})
+                        <button class="btn btn-sm btn-primary mt-2" 
+                                onclick="sendTestNote('${output.id}')">
+                            Send Test Note
+                        </button>
+                    </div>`;
+            }
+            
+            portsDiv.innerHTML = portsHTML;
+            
+            // Handle MIDI state changes
+            midiAccess.onstatechange = function(e) {
+                console.log('MIDI state change:', e);
+                // Refresh the port list when devices are connected/disconnected
+                onMIDISuccess(midiAccess);
+            };
+        }
+
+        function onMIDIFailure(error) {
+            let errorMessage = '';
+            if (error.name === 'SecurityError') {
+                errorMessage = `
+                    <div class="alert alert-warning">
+                        <h5>Security Permission Required</h5>
+                        <p>WebMIDI requires secure context (HTTPS) or localhost. To fix this:</p>
+                        <ol>
+                            <li>Make sure you're accessing this page via <code>localhost</code> or <code>https://</code></li>
+                            <li>Some browsers may require enabling WebMIDI:
+                                <ul>
+                                    <li>Firefox: Enable <code>dom.webmidi.enabled</code> in <code>about:config</code></li>
+                                    <li>Chrome/Edge: Should work by default on localhost</li>
+                                </ul>
+                            </li>
+                            <li>Reload the page after making these changes</li>
+                        </ol>
+                    </div>`;
+            } else {
+                errorMessage = `
+                    <div class="alert alert-danger">
+                        Failed to initialize WebMIDI: ${error}
+                    </div>`;
+            }
+            document.getElementById('midi-ports').innerHTML = errorMessage;
+        }
+
+        function onMIDIMessage(message) {
+            const log = document.getElementById('midi-log');
+            const data = message.data;
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            
+            // Format MIDI message
+            let msgType = data[0] >> 4;
+            let channel = data[0] & 0xF;
+            let msgString = `[${timestamp}] Channel ${channel + 1}: `;
+            
+            switch(msgType) {
+                case 8: // Note Off
+                    msgString += `Note Off: ${data[1]} (velocity: ${data[2]})`;
+                    break;
+                case 9: // Note On
+                    msgString += `Note On: ${data[1]} (velocity: ${data[2]})`;
+                    break;
+                case 11: // Control Change
+                    msgString += `Control Change: ${data[1]} (value: ${data[2]})`;
+                    break;
+                default:
+                    msgString += `Type ${msgType}: ${Array.from(data).map(n => n.toString(16).padStart(2, '0')).join(' ')}`;
+            }
+            
+            const div = document.createElement('div');
+            div.className = 'midi-message';
+            div.textContent = msgString;
+            log.appendChild(div);
+            
+            // Auto-scroll to bottom
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function sendTestNote(outputId) {
+            navigator.requestMIDIAccess().then(access => {
+                const output = access.outputs.get(outputId);
+                if (output) {
+                    // Send Note On (channel 1, note 60 (middle C), velocity 64)
+                    output.send([0x90, 60, 64]);
+                    
+                    // Send Note Off after 500ms
+                    setTimeout(() => {
+                        output.send([0x80, 60, 64]);
+                    }, 500);
+                }
+            });
+        }
+
+        function toggleInput(inputId) {
+            const checkbox = document.getElementById(`input-${inputId}`);
+            navigator.requestMIDIAccess().then(access => {
+                const input = access.inputs.get(inputId);
+                if (input) {
+                    input.onmidimessage = checkbox.checked ? onMIDIMessage : null;
+                }
+            });
+        }
+    </script>
+</body>
+</html> 

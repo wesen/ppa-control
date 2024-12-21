@@ -1,0 +1,177 @@
+package templates
+
+import (
+	"fmt"
+	"ppa-control/cmd/ppa-web/server"
+)
+
+templ Index(state server.AppState) {
+    @base("Home") {
+        <div class="row">
+            <div class="col-md-6">
+                @IPForm(state)
+                
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Commands</h5>
+                    </div>
+                    <div class="card-body">
+                        @StatusBar(state)
+
+                        <h6>Presets</h6>
+                        <div class="preset-grid">
+                            for i := 1; i <= 16; i++ {
+                                <button class="btn btn-outline-primary"
+                                    hx-post="/recall"
+                                    hx-target="#log-window"
+                                    hx-swap="innerHTML"
+                                    hx-vals={ fmt.Sprintf(`{"preset": "%d"}`, i) }>
+                                    { fmt.Sprintf("Preset %d", i) }
+                                </button>
+                            }
+                        </div>
+
+                        <h6 class="mt-3">Volume Control</h6>
+                        <div class="mb-3">
+                            <input type="range" class="form-range" min="0" max="100" step="1" id="volume"
+                                hx-post="/volume"
+                                hx-trigger="change"
+                                hx-target="#log-window"
+                                hx-swap="innerHTML"
+                                hx-vals='{"volume": ""}' 
+                                name="volume"/>
+                            <div class="text-center" id="volume-value">50</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Log</h5>
+                    </div>
+                    <div class="card-body">
+                        @LogWindow(state)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            document.getElementById('volume').addEventListener('input', function() {
+                const value = this.value;
+                document.getElementById('volume-value').textContent = value;
+                this.setAttribute('hx-vals', JSON.stringify({volume: value}));
+            });
+
+            // Function to style console output
+            function logPacket(packet) {
+                const timestamp = `%c${packet.timestamp}%c`;
+                const direction = `%c${packet.direction}%c`;
+                const source = `%c${packet.source}%c → %c${packet.destination}%c`;
+                
+                // Styles
+                const timeStyle = "color: #4361EE; font-weight: bold;";
+                const resetStyle = "color: inherit; font-weight: normal;";
+                const directionStyle = "color: #F72585; font-weight: bold; padding: 2px 6px; border-radius: 3px; background: rgba(247, 37, 133, 0.1);";
+                const addressStyle = "color: #666666;";
+                
+                // Log the basic info with styling
+                console.log(
+                    `${timestamp} ${direction} ${source}`,
+                    timeStyle, resetStyle,
+                    directionStyle, resetStyle,
+                    addressStyle, resetStyle, addressStyle, resetStyle
+                );
+                
+                // Log the header if present
+                if (packet.header) {
+                    console.group('Header');
+                    console.log(packet.header);
+                    console.groupEnd();
+                }
+                
+                // Log the payload if present
+                if (packet.payload) {
+                    console.group('Payload');
+                    console.log(packet.payload);
+                    console.groupEnd();
+                }
+                
+                // Log the hex dump if present
+                if (packet.hexDump) {
+                    console.group('Hex Dump');
+                    console.log(`%c${packet.hexDump}`, "color: #4361EE; font-family: monospace;");
+                    console.groupEnd();
+                }
+                
+                console.log('\n'); // Add some spacing between packets
+            }
+        </script>
+    }
+}
+
+templ IPForm(state server.AppState) {
+    <div class="card" id="ip-form">
+        <form hx-post="/set-ip" 
+              hx-target="#ip-form" 
+              hx-swap="outerHTML">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Device Connection</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="ip" class="form-label">Destination IP</label>
+                    <input type="text" class="form-control" id="ip" name="ip" 
+                        value={ state.DestIP } 
+                        placeholder="Enter device IP address"/>
+                </div>
+                <button type="submit" class="btn btn-primary">Set IP</button>
+                if state.DestIP != "" {
+                    <div class="alert alert-success mt-3">
+                        Connected to: { state.DestIP }
+                    </div>
+                }
+            </div>
+        </form>
+    </div>
+}
+
+templ StatusBar(state server.AppState) {
+    <div id="status-bar" class="mb-3" hx-get="/status" hx-trigger="every 2s">
+        <div class={ "alert", getStatusClass(state.Status) }>
+            <strong>Status:</strong> { state.Status }
+        </div>
+    </div>
+}
+
+templ LogWindow(state server.AppState) {
+    <div id="log-window" class="log-window">
+        for _, line := range state.Log {
+            if len(line) > 10 && line[:10] == "__PACKET__" {
+                <script>
+                    logPacket({ line[10:] });
+                </script>
+            } else {
+                <div>{ line }</div>
+            }
+        }
+    </div>
+}
+
+func getStatusClass(status string) string {
+    switch status {
+    case "Connected":
+        return "alert-success"
+    case "Disconnected":
+        return "alert-secondary"
+    case "Connecting...":
+        return "alert-info"
+    default:
+        if len(status) >= 5 && status[:5] == "Error" {
+            return "alert-danger"
+        }
+        return "alert-warning"
+    }
+} 

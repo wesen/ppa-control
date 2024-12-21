@@ -78,3 +78,114 @@ Added distinct JSON array and JSON Lines output formats for different use cases.
 - JSON format outputs a properly formatted array of all packets
 - JSONL format outputs one JSON object per line for streaming
 - Updated command-line help to clarify the difference between formats
+
+# Add ppa-cli Command Documentation
+
+Added comprehensive documentation for the ppa-cli command in cmd/ppa-cli/README.md.
+
+- Created detailed documentation of all subcommands (ping, recall, simulate, volume, udp-broadcast)
+- Added documentation for global flags and command-specific flags
+- Included practical usage examples for common tasks
+- Added network testing and device simulation examples
+
+# Add ui-test Command Documentation
+
+Added comprehensive documentation for the ui-test command in cmd/ui-test/README.md.
+
+- Created detailed documentation of the graphical user interface
+- Added installation prerequisites and build instructions
+- Documented all command-line flags and configuration options
+- Added interface overview with component descriptions
+- Included log management and upload functionality documentation
+- Added practical usage examples
+
+# Web Interface for PPA Control
+
+Added a web-based interface for controlling PPA devices using htmx and templ, providing:
+- Device connection management
+- Preset recall buttons
+- Volume control
+- Real-time command logging
+
+## Changes
+- Created new web server in cmd/ppa-web
+- Implemented templ templates for the UI
+- Added HTMX for dynamic updates
+- Integrated Bootstrap for styling
+- Added real-time log window for command feedback
+
+# Improved Web Interface with Background Ping
+
+Enhanced the web interface with proper client management and background ping:
+- Added Server struct for better state management
+- Implemented background ping loop with status updates
+- Added real-time connection status display
+- Improved thread safety with mutex locks
+- Added periodic status updates in the UI
+
+## Changes
+- Refactored main.go to use Server struct
+- Added background ping loop from ppa-cli
+- Added status bar with connection state
+- Added automatic status updates every 2 seconds
+- Improved error handling and state management
+
+# Add Detailed Packet Logging to Web Interface
+
+Enhanced the web interface with detailed packet logging similar to pcap:
+- Added packet details logging to browser console
+- Added styled console output for better readability
+- Added hex dump display for packet payloads
+- Added packet direction indicators
+- Added timestamp and source/destination information
+
+## Changes
+- Added PacketInfo struct for structured packet information
+- Added packet logging to JavaScript console
+- Added styled console output with color coding
+- Added detailed packet information display
+- Added hex dump support for packet payloads
+
+# Reorganize Web Interface Code Structure
+
+Improved code organization of the web interface:
+- Created separate server package for better modularity
+- Moved AppState and PacketInfo to their own types file
+- Improved template integration with server package
+- Added better type safety and package boundaries
+
+## Changes
+- Created cmd/ppa-web/server package
+- Moved server logic to dedicated package
+- Separated types into types.go
+- Updated templates to use server package types
+- Improved code organization and maintainability
+
+# WebMIDI Test Application
+
+Added a test application in test/web-midi to demonstrate WebMIDI capabilities. The application provides a web interface for:
+- Detecting and listing MIDI devices
+- Monitoring MIDI input messages
+- Sending test MIDI notes to output devices
+- Real-time device connection monitoring
+
+# Improve WebMIDI Security Handling
+
+Enhanced WebMIDI test application with better security error handling and documentation:
+- Added detailed security error messages with fix instructions
+- Updated documentation with browser-specific configuration steps
+- Added security requirements section to README
+- Disabled sysex access for better security
+
+Add templ generation directive
+Added a generate.go file with a go:generate directive to automate templ template generation, making it easier to maintain and update templates.
+
+# Improve Timer Handling in Ping Command
+
+Enhanced timer handling and cleanup in the ping command to prevent resource leaks and ensure proper cleanup on context cancellation.
+
+## Changes
+- Added proper timer cleanup in ping loop
+- Added timer stop on context cancellation
+- Added timer cleanup before channel processing
+- Improved resource management in ping loop
