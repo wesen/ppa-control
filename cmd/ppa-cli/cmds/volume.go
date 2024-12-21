@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"ppa-control/lib/client"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -21,7 +22,7 @@ var volumeCmd = &cobra.Command{
 		}
 
 		// Setup command context
-		cmdCtx := SetupCommand(cmd)
+		cmdCtx := client.SetupCommand(cmd)
 		defer cmdCtx.Cancel()
 
 		// Setup multiclient

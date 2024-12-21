@@ -1,11 +1,10 @@
-package cmds
+package client
 
 import (
 	"context"
 	"fmt"
 	"os"
 	"os/signal"
-	"ppa-control/lib/client"
 	"ppa-control/lib/client/discovery"
 	"strconv"
 	"strings"
@@ -27,7 +26,7 @@ type CommandConfig struct {
 // CommandChannels holds common channels used across commands
 type CommandChannels struct {
 	DiscoveryCh chan discovery.PeerInformation
-	ReceivedCh  chan client.ReceivedMessage
+	ReceivedCh  chan ReceivedMessage
 }
 
 // CommandContext encapsulates all command execution context and resources
@@ -37,7 +36,7 @@ type CommandContext struct {
 	ctx         context.Context
 	cancelFunc  context.CancelFunc
 	group       *errgroup.Group
-	multiClient *client.MultiClient
+	multiClient *MultiClient
 }
 
 // Context returns the context.Context for this command
@@ -83,7 +82,7 @@ func SetupCommand(cmd *cobra.Command) *CommandContext {
 
 	channels := &CommandChannels{
 		DiscoveryCh: make(chan discovery.PeerInformation),
-		ReceivedCh:  make(chan client.ReceivedMessage),
+		ReceivedCh:  make(chan ReceivedMessage),
 	}
 
 	// Setup context with cancellation
@@ -104,7 +103,7 @@ func SetupCommand(cmd *cobra.Command) *CommandContext {
 
 // SetupMultiClient creates and configures a MultiClient with the given configuration
 func (cc *CommandContext) SetupMultiClient(name string) error {
-	multiClient := client.NewMultiClient(name)
+	multiClient := NewMultiClient(name)
 
 	// Add clients for specified addresses
 	for _, addr := range strings.Split(cc.Config.Addresses, ",") {
@@ -123,7 +122,7 @@ func (cc *CommandContext) SetupMultiClient(name string) error {
 }
 
 // GetMultiClient returns the configured MultiClient
-func (cc *CommandContext) GetMultiClient() *client.MultiClient {
+func (cc *CommandContext) GetMultiClient() *MultiClient {
 	return cc.multiClient
 }
 
@@ -144,7 +143,7 @@ func (cc *CommandContext) StartMultiClient() {
 }
 
 // HandleDiscoveryMessage processes discovery messages and updates the MultiClient accordingly
-func (cc *CommandContext) HandleDiscoveryMessage(msg discovery.PeerInformation) (client.Client, error) {
+func (cc *CommandContext) HandleDiscoveryMessage(msg discovery.PeerInformation) (Client, error) {
 	switch msg.(type) {
 	case discovery.PeerDiscovered:
 		log.Info().
