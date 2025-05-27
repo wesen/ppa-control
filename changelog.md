@@ -294,3 +294,78 @@ Added a device discovery UI to the web interface that allows users to:
 - Added real-time device list updates
 - Added interface monitoring
 - Added discovery command-line flags
+
+# Enhanced Web Server Logging
+
+Added comprehensive logging to the web server to improve observability and debugging capabilities.
+
+- Added request logging middleware with request IDs, timing, and response sizes
+- Implemented panic recovery with stack trace logging
+- Configured structured logging with zerolog
+- Added caller information and timestamps to log output
+
+# Fix Web Server Locking Patterns
+
+Fixed potential deadlocks in the web server's locking patterns by improving mutex usage and lock ordering.
+
+- Eliminated recursive locking in discovery message handling
+- Fixed lock ordering in state updates and notifications
+- Improved lock granularity in packet logging
+- Moved data preparation outside of lock sections
+- Added proper lock release in notification system
+
+# Fix Server-Sent Events Implementation
+
+Fixed issues with Server-Sent Events (SSE) implementation in the web interface:
+
+- Added proper SSE event formatting with event types
+- Added heartbeat messages to keep connections alive
+- Added buffered channels to prevent blocking
+- Added proper CORS headers for cross-origin support
+- Improved connection cleanup handling
+
+# Improve SSE Error Handling
+
+Enhanced error handling in Server-Sent Events (SSE) implementation:
+
+- Added proper error handling for write operations
+- Improved error messages for unsupported streaming
+- Added connection alive checks in heartbeat
+- Added template rendering error handling
+- Changed HTTP status code for unsupported streaming
+
+# Migrate to Gorilla Mux and Improve Code Organization
+
+Migrated the web server to use Gorilla Mux and improved code organization:
+
+- Added Gorilla Mux for better route handling
+- Created dedicated types package to break import cycles
+- Implemented proper interface abstractions
+- Improved package organization and dependencies
+- Added proper HTTP method restrictions
+
+# Improve SSE Implementation with Dedicated Writer
+
+Enhanced SSE implementation with a dedicated writer type:
+
+- Added sseWriter type to encapsulate SSE functionality
+- Improved error handling for non-streaming responses
+- Added proper event type handling
+- Added better logging for SSE errors
+- Improved connection management
+
+# Add exclude-packets flag to pcap tool
+
+Added the ability to exclude specific packet types from the pcap tool output using the new --exclude-packets flag.
+
+- Added --exclude-packets flag to pcap tool that accepts a comma-separated list of packet types to exclude
+- Packet types can be excluded using the same format as --print-packets (deviceData,ping,liveCmd,presetRecall,unknown)
+- Excluded packets are filtered out even when using --print-packets=all
+
+# Add Support for Numeric Message Type Filtering in pcap
+
+Added the ability to filter packets by their numeric message type values in the pcap tool.
+
+- Added support for numeric message types in --print-packets and --exclude-packets flags (e.g., "9" for MessageType(9))
+- Maintained backward compatibility with named message types
+- Both named types (e.g., "deviceData") and numeric types (e.g., "9") can be mixed in the same command

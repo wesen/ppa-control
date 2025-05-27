@@ -1,13 +1,19 @@
 package main
 
 import (
-	"log"
+	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"ppa-control/cmd/ppa-web/handler"
+	"ppa-control/cmd/ppa-web/router"
 	"ppa-control/cmd/ppa-web/server"
+	"runtime/debug"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -27,46 +33,115 @@ func init() {
 	rootCmd.PersistentFlags().UintP("port", "p", 5001, "Port to use for device communication")
 }
 
+type statusResponseWriter struct {
+	http.Flusher
+	http.ResponseWriter
+	status int
+	size   int
+}
+
+func (w *statusResponseWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusResponseWriter) Write(b []byte) (int, error) {
+	size, err := w.ResponseWriter.Write(b)
+	w.size += size
+	return size, err
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Create a request ID and add it to the context
+		requestID := uuid.New().String()
+		ctx := context.WithValue(r.Context(), "request_id", requestID)
+		r = r.WithContext(ctx)
+
+		// Create a custom response writer to capture status code
+		sw := &statusResponseWriter{
+			ResponseWriter: w,
+			status:         http.StatusOK,
+		}
+
+		// Recover from panics
+		defer func() {
+			if err := recover(); err != nil {
+				log.Error().
+					Str("request_id", requestID).
+					Str("stack", string(debug.Stack())).
+					Interface("error", err).
+					Msg("Handler panic recovered")
+
+				sw.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(sw, "Internal Server Error")
+			}
+
+			// Log the request details after completion
+			log.Info().
+				Str("request_id", requestID).
+				Str("method", r.Method).
+				Str("path", r.URL.Path).
+				Str("remote_addr", r.RemoteAddr).
+				Int("status", sw.status).
+				Int("size", sw.size).
+				Dur("duration", time.Since(start)).
+				Msg("Request completed")
+		}()
+
+		next.ServeHTTP(sw, r)
+	})
+}
+
 func run(cmd *cobra.Command, args []string) error {
 	// Set up logging
 	level, err := zerolog.ParseLevel(logLevel)
 	if err != nil {
 		return err
 	}
+
+	// Configure zerolog
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	output := zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: time.RFC3339,
+	}
+	log.Logger = zerolog.New(output).
+		With().
+		Timestamp().
+		Caller().
+		Logger()
+
 	zerolog.SetGlobalLevel(level)
 
 	// Create server and handler
 	srv := server.FromCobraCommand(cmd)
-	handler := handler.NewHandler(srv)
+	h := handler.NewHandler(srv)
+	r := router.NewRouter(h)
 
-	// Serve static files
-	fs := http.FileServer(http.Dir("cmd/ppa-web/static"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
-
-	// Register handlers
-	http.HandleFunc("/", handler.HandleIndex)
-	http.HandleFunc("/status", handler.HandleStatus)
-	http.HandleFunc("/set-ip", handler.HandleSetIP)
-	http.HandleFunc("/recall", handler.HandleRecall)
-	http.HandleFunc("/volume", handler.HandleVolume)
-	http.HandleFunc("/discovery/start", handler.HandleStartDiscovery)
-	http.HandleFunc("/discovery/stop", handler.HandleStopDiscovery)
-	http.HandleFunc("/discovery/events", handler.HandleDiscoveryEvents)
+	// Add middleware
+	r.Use(loggingMiddleware)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	log.Printf("Starting server on :%s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal(err)
+	log.Info().Msgf("Starting server on :%s", port)
+
+	httpServer := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
 	}
-	return nil
+
+	return httpServer.ListenAndServe()
 }
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to execute root command")
 		os.Exit(1)
 	}
 }

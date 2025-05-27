@@ -80,7 +80,7 @@ type PacketHandler struct {
 	jsonPackets        []PacketData // For collecting JSON array output
 }
 
-func NewPacketHandler(printPackets string, printHexdump bool, captureTimeout int, outputFormat string) *PacketHandler {
+func NewPacketHandler(printPackets string, excludePackets string, printHexdump bool, captureTimeout int, outputFormat string) *PacketHandler {
 	ph := &PacketHandler{
 		whiteListedPackets: make(map[protocol.MessageType]bool),
 		blackListedPackets: make(map[protocol.MessageType]bool),
@@ -92,6 +92,7 @@ func NewPacketHandler(printPackets string, printHexdump bool, captureTimeout int
 		jsonPackets:        make([]PacketData, 0),
 	}
 	ph.parsePacketsToPrint(printPackets)
+	ph.parsePacketsToExclude(excludePackets)
 	return ph
 }
 
@@ -115,6 +116,9 @@ func (ph *PacketHandler) parsePacketsToPrint(printPackets string) {
 				continue // Skip invalid type bytes
 			}
 			messageType = protocol.MessageType(typeByte)
+		} else if val, err := strconv.ParseUint(p, 10, 8); err == nil {
+			// Direct numeric message type
+			messageType = protocol.MessageType(val)
 		} else {
 			switch p {
 			case "deviceData":
@@ -137,6 +141,44 @@ func (ph *PacketHandler) parsePacketsToPrint(printPackets string) {
 		} else {
 			ph.whiteListedPackets[messageType] = true
 		}
+	}
+}
+
+func (ph *PacketHandler) parsePacketsToExclude(excludePackets string) {
+	if excludePackets == "" {
+		return
+	}
+
+	for _, p := range strings.Split(excludePackets, ",") {
+		p = strings.TrimSpace(p)
+
+		var messageType protocol.MessageType
+		if strings.HasPrefix(p, "type:") {
+			typeByte, err := parseHexByte(strings.TrimPrefix(p, "type:"))
+			if err != nil {
+				continue // Skip invalid type bytes
+			}
+			messageType = protocol.MessageType(typeByte)
+		} else if val, err := strconv.ParseUint(p, 10, 8); err == nil {
+			// Direct numeric message type
+			messageType = protocol.MessageType(val)
+		} else {
+			switch p {
+			case "deviceData":
+				messageType = protocol.MessageTypeDeviceData
+			case "ping":
+				messageType = protocol.MessageTypePing
+			case "liveCmd":
+				messageType = protocol.MessageTypeLiveCmd
+			case "presetRecall":
+				messageType = protocol.MessageTypePresetRecall
+			case "unknown":
+				messageType = protocol.MessageTypeUnknown
+			default:
+				continue // Skip invalid message types
+			}
+		}
+		ph.blackListedPackets[messageType] = true
 	}
 }
 

@@ -2,10 +2,10 @@ package templates
 
 import (
 	"fmt"
-	"ppa-control/cmd/ppa-web/server"
+	"ppa-control/cmd/ppa-web/types"
 )
 
-templ Index(state server.AppState) {
+templ Index(state types.AppState) {
     @Base("Home") {
         <div class="row">
             <div class="col-md-6">
@@ -112,7 +112,7 @@ templ Index(state server.AppState) {
     }
 }
 
-templ IPForm(state server.AppState) {
+templ IPForm(state types.AppState) {
     <div class="card" id="ip-form">
         <form hx-post="/set-ip" 
               hx-target="#ip-form" 
@@ -138,7 +138,7 @@ templ IPForm(state server.AppState) {
     </div>
 }
 
-templ StatusBar(state server.AppState) {
+templ StatusBar(state types.AppState) {
     <div id="status-bar" class="mb-3" hx-get="/status" hx-trigger="every 2s">
         <div class={ "alert", getStatusClass(state.Status) }>
             <strong>Status:</strong> { state.Status }
@@ -146,7 +146,7 @@ templ StatusBar(state server.AppState) {
     </div>
 }
 
-templ LogWindow(state server.AppState) {
+templ LogWindow(state types.AppState) {
     <div id="log-window" class="log-window">
         for _, line := range state.Log {
             if len(line) > 10 && line[:10] == "__PACKET__" {

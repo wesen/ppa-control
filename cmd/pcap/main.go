@@ -15,7 +15,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.Flags().String("print-packets", "deviceData,liveCmd,unknown,ping,presetRecall", "Print packets, comma-separated list of deviceData,ping,liveCmd,presetRecall,unknown")
+	rootCmd.Flags().String("print-packets", "deviceData,liveCmd,unknown,ping,presetRecall", "Print packets, comma-separated list of deviceData,ping,liveCmd,presetRecall,unknown or message type numbers (e.g., 9)")
+	rootCmd.Flags().String("exclude-packets", "", "Exclude packets, comma-separated list of deviceData,ping,liveCmd,presetRecall,unknown or message type numbers (e.g., 9)")
 	rootCmd.Flags().Bool("print-hexdump", false, "Print hexdump")
 	rootCmd.Flags().String("interface", "", "Network interface to capture packets from")
 	rootCmd.Flags().Int("timeout", 0, "Capture timeout in seconds (0 for unlimited)")
@@ -31,12 +32,13 @@ func main() {
 
 func run(cmd *cobra.Command, args []string) {
 	printPackets, _ := cmd.Flags().GetString("print-packets")
+	excludePackets, _ := cmd.Flags().GetString("exclude-packets")
 	printHexdump, _ := cmd.Flags().GetBool("print-hexdump")
 	interfaceName, _ := cmd.Flags().GetString("interface")
 	captureTimeout, _ := cmd.Flags().GetInt("timeout")
 	outputFormat, _ := cmd.Flags().GetString("output-format")
 
-	handler := NewPacketHandler(printPackets, printHexdump, captureTimeout, outputFormat)
+	handler := NewPacketHandler(printPackets, excludePackets, printHexdump, captureTimeout, outputFormat)
 
 	if interfaceName != "" {
 		handler.CapturePackets(interfaceName)

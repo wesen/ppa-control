@@ -66,6 +66,18 @@ type BasicHeader struct {
 	Reserved       byte // leave 0
 }
 
+func (bh *BasicHeader) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"MessageType":    bh.MessageType,
+		"ProtocolId":     bh.ProtocolId,
+		"Status":         bh.Status,
+		"DeviceUniqueId": bh.DeviceUniqueId,
+		"SequenceNumber": bh.SequenceNumber,
+		"ComponentId":    bh.ComponentId,
+		"Reserved":       bh.Reserved,
+	}
+}
+
 func ParseHeader(buf []byte) (*BasicHeader, error) {
 	w := bytes.NewReader(buf)
 	h := &BasicHeader{}

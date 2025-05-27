@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"ppa-control/cmd/ppa-web/types"
 	"ppa-control/lib"
 	"ppa-control/lib/client"
 	"ppa-control/lib/client/discovery"
@@ -16,7 +17,7 @@ import (
 
 // Server represents the web server and manages the application state
 type Server struct {
-	state           AppState
+	state           types.AppState
 	mu              sync.RWMutex
 	cmdCtx          *lib.CommandContext
 	receiveCh       chan client.ReceivedMessage
@@ -44,12 +45,12 @@ func NewServer() *Server {
 	cmdCtx.SetupContext(ctx, cancelFunc)
 
 	return &Server{
-		state: AppState{
+		state: types.AppState{
 			DestIP:            "",
 			Log:               make([]string, 0),
 			Status:            "Disconnected",
 			DiscoveryEnabled:  false,
-			DiscoveredDevices: make(map[string]DeviceInfo),
+			DiscoveredDevices: make(map[string]types.DeviceInfo),
 			ActiveInterfaces:  make(map[string]bool),
 		},
 		cmdCtx:          cmdCtx,
@@ -63,12 +64,12 @@ func FromCobraCommand(cmd *cobra.Command) *Server {
 	cmdCtx := lib.SetupCommand(cmd)
 
 	return &Server{
-		state: AppState{
+		state: types.AppState{
 			DestIP:            "",
 			Log:               make([]string, 0),
 			Status:            "Disconnected",
 			DiscoveryEnabled:  false,
-			DiscoveredDevices: make(map[string]DeviceInfo),
+			DiscoveredDevices: make(map[string]types.DeviceInfo),
 			ActiveInterfaces:  make(map[string]bool),
 		},
 		cmdCtx:          cmdCtx,
@@ -98,9 +99,14 @@ func (s *Server) RemoveUpdateListener(ch chan struct{}) {
 
 // notifyUpdateListeners notifies all listeners about a state update
 func (s *Server) notifyUpdateListeners() {
+	// Get a copy of listeners under read lock
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, ch := range s.updateListeners {
+	listeners := make([]chan struct{}, len(s.updateListeners))
+	copy(listeners, s.updateListeners)
+	s.mu.RUnlock()
+
+	// Notify without holding any lock
+	for _, ch := range listeners {
 		select {
 		case ch <- struct{}{}:
 		default:
@@ -116,9 +122,9 @@ func (s *Server) StartDiscovery() error {
 	}
 
 	s.discoveryCtx, s.discoveryCancel = context.WithCancel(s.cmdCtx.Context())
-	s.SetState(func(state *AppState) {
+	s.SetState(func(state *types.AppState) {
 		state.DiscoveryEnabled = true
-		state.DiscoveredDevices = make(map[string]DeviceInfo)
+		state.DiscoveredDevices = make(map[string]types.DeviceInfo)
 		state.ActiveInterfaces = make(map[string]bool)
 	})
 
@@ -139,9 +145,9 @@ func (s *Server) StopDiscovery() error {
 	s.discoveryCtx = nil
 	s.discoveryCancel = nil
 
-	s.SetState(func(state *AppState) {
+	s.SetState(func(state *types.AppState) {
 		state.DiscoveryEnabled = false
-		state.DiscoveredDevices = make(map[string]DeviceInfo)
+		state.DiscoveredDevices = make(map[string]types.DeviceInfo)
 		state.ActiveInterfaces = make(map[string]bool)
 	})
 
@@ -162,31 +168,67 @@ func (s *Server) runDiscoveryLoop() error {
 
 // handleDiscoveryMessage processes discovery messages
 func (s *Server) handleDiscoveryMessage(msg discovery.PeerInformation) {
+	var logMsg string
+	var addr string
+	var iface string
+
+	// First handle the message and prepare logging info
+	switch m := msg.(type) {
+	case discovery.PeerDiscovered:
+		addr = m.GetAddress()
+		iface = m.GetInterface()
+		logMsg = fmt.Sprintf("Device discovered: %s on %s", addr, iface)
+	case discovery.PeerLost:
+		addr = m.GetAddress()
+		iface = m.GetInterface()
+		logMsg = fmt.Sprintf("Device lost: %s on %s", addr, iface)
+	}
+
+	// Now update state with a single lock
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	switch m := msg.(type) {
+	switch msg.(type) {
 	case discovery.PeerDiscovered:
-		s.state.DiscoveredDevices[m.GetAddress()] = DeviceInfo{
-			Address:   m.GetAddress(),
-			Interface: m.GetInterface(),
+		s.state.DiscoveredDevices[addr] = types.DeviceInfo{
+			Address:   addr,
+			Interface: iface,
 			LastSeen:  time.Now(),
 		}
-		s.LogPacket("Device discovered: %s on %s", m.GetAddress(), m.GetInterface())
 	case discovery.PeerLost:
-		delete(s.state.DiscoveredDevices, m.GetAddress())
-		s.LogPacket("Device lost: %s on %s", m.GetAddress(), m.GetInterface())
+		delete(s.state.DiscoveredDevices, addr)
 	}
 
-	s.notifyUpdateListeners()
+	// Add log message while we still have the lock
+	s.state.Log = append(s.state.Log, logMsg)
+	if len(s.state.Log) > 100 {
+		s.state.Log = s.state.Log[1:]
+	}
+
+	// Get a copy of listeners while under lock
+	listeners := make([]chan struct{}, len(s.updateListeners))
+	copy(listeners, s.updateListeners)
+
+	// Release lock before notification
+	s.mu.Unlock()
+
+	// Notify listeners without holding the lock
+	for _, ch := range listeners {
+		select {
+		case ch <- struct{}{}:
+		default:
+			// Skip if channel is blocked
+		}
+	}
 }
 
 // LogPacket logs a formatted message to the state log
 func (s *Server) LogPacket(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	msg := fmt.Sprintf(format, args...)
 	s.state.Log = append(s.state.Log, msg)
 	if len(s.state.Log) > 100 {
 		s.state.Log = s.state.Log[1:]
@@ -194,35 +236,37 @@ func (s *Server) LogPacket(format string, args ...interface{}) {
 }
 
 // LogPacketDetails logs detailed packet information to the state log
-func (s *Server) LogPacketDetails(packet PacketInfo) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Convert to JSON for console logging
+func (s *Server) LogPacketDetails(packet types.PacketInfo) {
+	// Convert to JSON outside the lock
 	jsonData, err := json.Marshal(packet)
 	if err != nil {
 		return
 	}
+	logMsg := fmt.Sprintf("__PACKET__%s", string(jsonData))
 
-	// Add a special marker that the frontend will recognize for console logging
-	s.state.Log = append(s.state.Log, fmt.Sprintf("__PACKET__%s", string(jsonData)))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.state.Log = append(s.state.Log, logMsg)
 	if len(s.state.Log) > 100 {
 		s.state.Log = s.state.Log[1:]
 	}
 }
 
 // GetState returns a copy of the current application state
-func (s *Server) GetState() AppState {
+func (s *Server) GetState() types.AppState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.state
 }
 
 // SetState updates the application state using the provided function
-func (s *Server) SetState(fn func(*AppState)) {
+func (s *Server) SetState(fn func(*types.AppState)) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	fn(&s.state)
+	s.mu.Unlock()
+
+	// Notify listeners after releasing the lock
 	s.notifyUpdateListeners()
 }
 
@@ -260,7 +304,8 @@ func (s *Server) ConnectToDevice(addr string) error {
 				return
 			case <-ticker.C:
 				c.SendPing()
-				s.LogPacketDetails(PacketInfo{
+				// Create packet info outside any locks
+				pingPacket := types.PacketInfo{
 					Timestamp:   time.Now().Format(time.RFC3339Nano),
 					Direction:   "Client → Device",
 					Source:      "Web Client",
@@ -269,20 +314,17 @@ func (s *Server) ConnectToDevice(addr string) error {
 						"MessageType": "Ping",
 						"Status":      "CommandClient",
 					},
-				})
+				}
+				s.LogPacketDetails(pingPacket)
 			case msg := <-s.receiveCh:
 				if msg.Header != nil {
-					s.SetState(func(state *AppState) {
-						state.Status = "Connected"
-					})
-
-					// Log received packet details
-					packet := PacketInfo{
+					// Create packet info before any state changes
+					packet := types.PacketInfo{
 						Timestamp:   time.Now().Format(time.RFC3339Nano),
 						Direction:   "Device → Client",
 						Source:      msg.RemoteAddress.String(),
 						Destination: "Web Client",
-						Header:      msg.Header,
+						Header:      msg.Header.ToMap(),
 					}
 
 					if msg.Data != nil {
@@ -290,6 +332,12 @@ func (s *Server) ConnectToDevice(addr string) error {
 						packet.HexDump = hex.Dump(msg.Data)
 					}
 
+					// Update state first
+					s.SetState(func(state *types.AppState) {
+						state.Status = "Connected"
+					})
+
+					// Then log packet details
 					s.LogPacketDetails(packet)
 				}
 			}
