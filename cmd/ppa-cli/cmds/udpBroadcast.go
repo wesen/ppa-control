@@ -270,7 +270,7 @@ func NewUDPBroadcastCommand() (*UDPBroadcastGlazedCommand, error) {
 		return nil, err
 	}
 
-	// Create glazed layer for structured output  
+	// Create glazed layer for structured output
 	glazedLayer, err := settings.NewGlazedParameterLayers()
 	if err != nil {
 		return nil, err

@@ -220,6 +220,11 @@ func (ph *PacketHandler) HandlePcapFile(fileName string) {
 	}
 	defer handle.Close()
 
+	// Only print opening message for text format
+	if ph.outputFormat == "text" {
+		fmt.Printf("Opening %s\n", fileName)
+	}
+
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
 		ph.handlePacket(packet)

@@ -44,7 +44,6 @@ func run(cmd *cobra.Command, args []string) {
 		handler.CapturePackets(interfaceName)
 	} else if len(args) == 1 {
 		fileName := args[0]
-		fmt.Printf("Opening %s\n", fileName)
 		handler.HandlePcapFile(fileName)
 	} else {
 		cmd.Usage()

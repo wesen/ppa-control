@@ -52,7 +52,6 @@ func NewPPAParameterLayer() (layers.ParameterLayer, error) {
 				parameters.WithDefault(0xFF),
 				parameters.WithHelp("Component ID to use for devices"),
 				parameters.WithShortFlag("c"),
-
 			),
 			// Legacy compatibility for camelCase componentId
 			parameters.NewParameterDefinition(
