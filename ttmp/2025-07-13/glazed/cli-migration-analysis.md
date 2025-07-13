@@ -13,9 +13,13 @@ Migrate the existing Cobra-based CLI commands to the Glazed framework in order t
 
 ## Architectural Sketch
 1. **Glazed integration package**
-   - `lib/glazed/layers.go` – define shared parameter layers (logging, ppa).
-   - `lib/glazed/settings.go` – structs binding parameter layers to strongly-typed settings.
-   - `lib/glazed/context.go` – adapter that converts Glazed layer values into the existing `CommandContext`.
+   - `lib/glazed/layers.go` – define shared parameter layers ( ppa).
+      - Parse layer into PPASetitngs struct
+      - Use that struct to:
+         - Add a method CreateCommandContextFromParsedLayers()
+   - Use initLogging from glazed for setting up the logging (see glazed/cmd/glaze/main.go)
+   - Try to keep things as close as possible to the original source, no new files if possible, etc...
+
 
 2. **Command skeletons** (example shown for `ping`):
 

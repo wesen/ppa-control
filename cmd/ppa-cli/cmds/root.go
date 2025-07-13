@@ -9,6 +9,8 @@ import (
 	logger "ppa-control/lib/log"
 	"ppa-control/lib/utils"
 	"time"
+
+	"github.com/go-go-golems/glazed/pkg/cli"
 )
 
 var rootCmd = &cobra.Command{
@@ -64,4 +66,21 @@ func init() {
 	rootCmd.PersistentFlags().Bool("with-caller", false, "Log caller")
 	rootCmd.PersistentFlags().String("dump-mem-profile", "", "Dump memory profile to file")
 	rootCmd.PersistentFlags().Bool("track-leaks", false, "Track memory and goroutine leaks")
+
+	// Add glazed ping command
+	pingGlazedCmd, err := NewPingGlazedCommand()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create glazed ping command")
+	}
+
+	// Build Cobra command with dual mode support
+	pingGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
+		pingGlazedCmd,
+		cli.WithGlazeToggleFlag("structured-output"),
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to build glazed ping Cobra command")
+	}
+
+	rootCmd.AddCommand(pingGlazedCobraCmd)
 }
