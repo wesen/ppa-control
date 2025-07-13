@@ -1,30 +1,34 @@
-title: ✨ Add glazed simulate command with dual mode support
+title: 🔧 Fix glazed command compatibility issues for legacy CLI behavior
 description: |
-  Port the simulate command from ppa-control/cmd/ppa-cli/cmds/simulate.go to the glazed framework.
-  
-  Features implemented:
-  - Created simulate_glazed.go with both BareCommand and GlazeCommand interfaces
-  - Dual mode support: classic logging output and structured JSON/CSV/table output
-  - Custom parameter layer with listen-address and listen-port to avoid flag conflicts
-  - Structured output emits device lifecycle events (device_created, device_started, device_stopped)
-  - Uses existing glazed layers for logging, output formatting, and PPA configuration
-  - Added to root.go using BuildCobraCommandDualMode pattern
-  
-  Command supports:
-  - --structured-output flag to switch between modes
-  - --listen-address (default: localhost) for binding address  
-  - --listen-port (default: 5001) for listening port
-  - --interface (-i) for network interface binding
-  - All standard glazed output formats (json, csv, table, yaml, etc.)
-  
-  Testing:
-  - Successfully builds with: go build ./cmd/ppa-cli
-  - Help system works: ./ppa-cli simulate-glazed --help
-  - Classic mode: ./ppa-cli simulate-glazed --listen-port 5002  
-  - Structured mode: ./ppa-cli simulate-glazed --structured-output --output json
-  - Emits structured events for device creation and lifecycle
-  
-  Notes:
-  - Temporarily disabled udp-broadcast-glazed command due to pre-existing flag conflicts
-  - Simulation package would benefit from event hooks for richer structured output
-  - Used different parameter names (listen-address/listen-port) to avoid conflicts with standard PPA layer
+  Fixed critical compatibility issues to ensure glazed commands are safe replacements for legacy CLI:
+
+  1. PPA Parameter Layer compatibility:
+     - Added legacy "componentId" parameter alongside "component-id" 
+     - Updated PPASettings struct to handle both parameter names
+     - Added logic to prioritize legacy value when explicitly set
+
+  2. Discovery defaults alignment:
+     - Changed discover parameter default from false to true
+     - Matches legacy behavior where discovery was enabled by default
+
+  3. UDP broadcast flag compatibility:
+     - Fixed address flag from "-u" to "-a" (legacy compatibility)
+     - Fixed port flag from "-P" to "-p" (legacy compatibility)
+
+  4. Parameter layer cleanup for UDP broadcast:
+     - Removed irrelevant PPA connection flags from UDP broadcast command
+     - Created minimal layer set (UDP broadcast + logging + glazed only)
+     - Eliminates confusing/irrelevant flags like --component-id, --discover
+
+  All tests pass and commands build successfully. Legacy CLI users can now safely
+  migrate to glazed commands without changing their flag usage patterns.
+
+  APIs added:
+  - PPASettings.ComponentIDLegacy field for backward compatibility
+  - Legacy componentId parameter definition in PPA layer
+  - Minimal layer construction for UDP broadcast commands
+
+  Tests run:
+  - go build ./... - PASS
+  - CLI help verification - PASS  
+  - Parameter flag verification - PASS

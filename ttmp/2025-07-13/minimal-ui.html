@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio Monitor Remote</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .remote-control {
+            background: linear-gradient(145deg, #1a1a1a, #0f0f0f);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 
+                0 20px 40px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            color: #cccccc;
+        }
+
+        .section {
+            margin-bottom: 35px;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 500;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .presets {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .preset-btn {
+            background: #222;
+            border: 1px solid #333;
+            color: #ccc;
+            padding: 15px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .preset-btn:hover {
+            background: #2a2a2a;
+            border-color: #555;
+        }
+
+        .preset-btn.active {
+            background: #333;
+            border-color: #666;
+            color: #fff;
+        }
+
+        .volume-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .volume-slider {
+            flex: 1;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+            -webkit-appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #666;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            background: #888;
+            transform: scale(1.1);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #666;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .volume-slider::-moz-range-thumb:hover {
+            background: #888;
+            transform: scale(1.1);
+        }
+
+        .volume-display {
+            font-size: 14px;
+            font-weight: 500;
+            color: #ccc;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .mute-btn {
+            background: #1a1a1a;
+            border: 2px solid #333;
+            color: #ccc;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            margin: 0 auto;
+        }
+
+        .mute-btn:hover {
+            border-color: #555;
+            background: #222;
+        }
+
+        .mute-btn.muted {
+            border-color: #666;
+            background: #333;
+            color: #fff;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+            transition: all 0.3s ease;
+        }
+
+        .status-dot.active {
+            background: #666;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="remote-control">
+        <div class="header">STUDIO MONITOR</div>
+        
+        <div class="section">
+            <div class="section-title">Presets</div>
+            <div class="presets">
+                <button class="preset-btn active" data-preset="1">FLAT</button>
+                <button class="preset-btn" data-preset="2">VOCAL</button>
+                <button class="preset-btn" data-preset="3">BASS</button>
+                <button class="preset-btn" data-preset="4">BRIGHT</button>
+                <button class="preset-btn" data-preset="5">WARM</button>
+                <button class="preset-btn" data-preset="6">CUSTOM</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Master Volume</div>
+            <div class="volume-container">
+                <span>🔊</span>
+                <input type="range" class="volume-slider" min="0" max="100" value="75" id="volumeSlider">
+                <div class="volume-display" id="volumeDisplay">75</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Mute</div>
+            <button class="mute-btn" id="muteBtn">🔇</button>
+        </div>
+
+        <div class="status-indicator">
+            <div class="status-dot active" id="statusDot"></div>
+            <span id="statusText">ACTIVE</span>
+        </div>
+    </div>
+
+    <script>
+        // State management
+        let currentPreset = 1;
+        let currentVolume = 75;
+        let isMuted = false;
+        let lastVolumeBeforeMute = 75;
+
+        // DOM elements
+        const presetBtns = document.querySelectorAll('.preset-btn');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeDisplay = document.getElementById('volumeDisplay');
+        const muteBtn = document.getElementById('muteBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        // Preset handling
+        presetBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Remove active class from all buttons
+                presetBtns.forEach(b => b.classList.remove('active'));
+                
+                // Add active class to clicked button
+                btn.classList.add('active');
+                
+                // Update current preset
+                currentPreset = parseInt(btn.dataset.preset);
+                
+                // Update status
+                updateStatus();
+                
+                console.log(`Preset changed to: ${btn.textContent}`);
+            });
+        });
+
+        // Volume handling
+        volumeSlider.addEventListener('input', (e) => {
+            if (!isMuted) {
+                currentVolume = parseInt(e.target.value);
+                volumeDisplay.textContent = currentVolume;
+                updateStatus();
+                
+                console.log(`Volume changed to: ${currentVolume}`);
+            }
+        });
+
+        // Mute handling
+        muteBtn.addEventListener('click', () => {
+            if (isMuted) {
+                // Unmute
+                isMuted = false;
+                muteBtn.classList.remove('muted');
+                muteBtn.textContent = '🔇';
+                volumeSlider.value = lastVolumeBeforeMute;
+                currentVolume = lastVolumeBeforeMute;
+                volumeDisplay.textContent = currentVolume;
+                statusText.textContent = 'ACTIVE';
+                statusDot.classList.add('active');
+                
+                console.log('Unmuted');
+            } else {
+                // Mute
+                lastVolumeBeforeMute = currentVolume;
+                isMuted = true;
+                muteBtn.classList.add('muted');
+                muteBtn.textContent = '🔊';
+                volumeSlider.value = 0;
+                currentVolume = 0;
+                volumeDisplay.textContent = 0;
+                statusText.textContent = 'MUTED';
+                statusDot.classList.remove('active');
+                
+                console.log('Muted');
+            }
+        });
+
+        // Status update function
+        function updateStatus() {
+            if (!isMuted) {
+                statusText.textContent = 'ACTIVE';
+                statusDot.classList.add('active');
+            }
+        }
+
+        // Initialize
+        updateStatus();
+    </script>
+</body>
+</html>

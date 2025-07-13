@@ -67,88 +67,72 @@ func init() {
 	rootCmd.PersistentFlags().String("dump-mem-profile", "", "Dump memory profile to file")
 	rootCmd.PersistentFlags().Bool("track-leaks", false, "Track memory and goroutine leaks")
 
-	// Add glazed ping command
-	pingGlazedCmd, err := NewPingGlazedCommand()
+	// Add ping command
+	pingCmd, err := NewPingCommand()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create glazed ping command")
+		log.Fatal().Err(err).Msg("Failed to create ping command")
 	}
 
 	// Build Cobra command with dual mode support
-	pingGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
-		pingGlazedCmd,
+	pingCobraCmd, err := cli.BuildCobraCommandDualMode(
+		pingCmd,
 		cli.WithGlazeToggleFlag("structured-output"),
 	)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to build glazed ping Cobra command")
+		log.Fatal().Err(err).Msg("Failed to build ping Cobra command")
 	}
 
-	rootCmd.AddCommand(pingGlazedCobraCmd)
+	rootCmd.AddCommand(pingCobraCmd)
 
-	// Add glazed volume command
-	volumeGlazedCmd, err := NewVolumeGlazedCommand()
+	// Add volume command
+	volumeCmd, err := NewVolumeCommand()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create glazed volume command")
+		log.Fatal().Err(err).Msg("Failed to create volume command")
 	}
 
 	// Build Cobra command with dual mode support
-	volumeGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
-		volumeGlazedCmd,
+	volumeCobraCmd, err := cli.BuildCobraCommandDualMode(
+		volumeCmd,
 		cli.WithGlazeToggleFlag("structured-output"),
 	)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to build glazed volume Cobra command")
+		log.Fatal().Err(err).Msg("Failed to build volume Cobra command")
 	}
 
-	rootCmd.AddCommand(volumeGlazedCobraCmd)
+	rootCmd.AddCommand(volumeCobraCmd)
 
-	// Add glazed recall command
-	recallGlazedCmd, err := NewRecallGlazedCommand()
+	// Add recall command
+	recallCmd, err := NewRecallCommand()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create glazed recall command")
+		log.Fatal().Err(err).Msg("Failed to create recall command")
 	}
 
 	// Build Cobra command with dual mode support
-	recallGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
-		recallGlazedCmd,
+	recallCobraCmd, err := cli.BuildCobraCommandDualMode(
+		recallCmd,
 		cli.WithGlazeToggleFlag("structured-output"),
 	)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to build glazed recall Cobra command")
+		log.Fatal().Err(err).Msg("Failed to build recall Cobra command")
 	}
 
-	rootCmd.AddCommand(recallGlazedCobraCmd)
+	rootCmd.AddCommand(recallCobraCmd)
 
-	// Add glazed UDP broadcast command
-	udpBroadcastGlazedCmd, err := NewUDPBroadcastGlazedCommand()
+	// Add UDP broadcast command
+	udpBroadcastCmd, err := NewUDPBroadcastCommand()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create glazed UDP broadcast command")
+		log.Fatal().Err(err).Msg("Failed to create UDP broadcast command")
 	}
 
 	// Build Cobra command with dual mode support
-	udpBroadcastGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
-		udpBroadcastGlazedCmd,
+	udpBroadcastCobraCmd, err := cli.BuildCobraCommandDualMode(
+		udpBroadcastCmd,
 		cli.WithGlazeToggleFlag("structured-output"),
 	)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to build glazed UDP broadcast Cobra command")
+		log.Fatal().Err(err).Msg("Failed to build UDP broadcast Cobra command")
 	}
 
-	rootCmd.AddCommand(udpBroadcastGlazedCobraCmd)
+	rootCmd.AddCommand(udpBroadcastCobraCmd)
 
-	// Add glazed simulate command
-	simulateGlazedCmd, err := NewSimulateGlazedCommand()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create glazed simulate command")
-	}
-
-	// Build Cobra command with dual mode support
-	simulateGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
-		simulateGlazedCmd,
-		cli.WithGlazeToggleFlag("structured-output"),
-	)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to build glazed simulate Cobra command")
-	}
-
-	rootCmd.AddCommand(simulateGlazedCobraCmd)
 }

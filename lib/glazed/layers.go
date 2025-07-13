@@ -7,9 +7,9 @@ import (
 	"ppa-control/lib/client/discovery"
 
 	"github.com/go-go-golems/glazed/pkg/cmds/layers"
+	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/cmds/parameters"
 	"github.com/go-go-golems/glazed/pkg/settings"
-	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 )
 
 const (
@@ -19,11 +19,12 @@ const (
 
 // PPASettings represents the common PPA configuration parameters
 type PPASettings struct {
-	Addresses   string   `glazed.parameter:"addresses"`
-	Discover    bool     `glazed.parameter:"discover"`
-	ComponentID uint     `glazed.parameter:"component-id"`
-	Port        uint     `glazed.parameter:"port"`
-	Interfaces  []string `glazed.parameter:"interfaces"`
+	Addresses         string   `glazed.parameter:"addresses"`
+	Discover          bool     `glazed.parameter:"discover"`
+	ComponentID       uint     `glazed.parameter:"component-id"`
+	ComponentIDLegacy uint     `glazed.parameter:"componentId"` // Legacy compatibility
+	Port              uint     `glazed.parameter:"port"`
+	Interfaces        []string `glazed.parameter:"interfaces"`
 }
 
 // NewPPAParameterLayer creates a parameter layer for common PPA configuration
@@ -41,7 +42,7 @@ func NewPPAParameterLayer() (layers.ParameterLayer, error) {
 			parameters.NewParameterDefinition(
 				"discover",
 				parameters.ParameterTypeBool,
-				parameters.WithDefault(false),
+				parameters.WithDefault(true), // Changed to match legacy behavior
 				parameters.WithHelp("Send broadcast discovery messages"),
 				parameters.WithShortFlag("d"),
 			),
@@ -51,6 +52,14 @@ func NewPPAParameterLayer() (layers.ParameterLayer, error) {
 				parameters.WithDefault(0xFF),
 				parameters.WithHelp("Component ID to use for devices"),
 				parameters.WithShortFlag("c"),
+
+			),
+			// Legacy compatibility for camelCase componentId
+			parameters.NewParameterDefinition(
+				"componentId",
+				parameters.ParameterTypeInteger,
+				parameters.WithDefault(0xFF),
+				parameters.WithHelp("Component ID to use for devices (legacy compatibility)"),
 			),
 			parameters.NewParameterDefinition(
 				"port",
@@ -76,11 +85,17 @@ func CreateCommandContextFromParsedLayers(ctx context.Context, parsedLayers *lay
 		return nil, err
 	}
 
+	// Determine ComponentID: use legacy if main is default and legacy is set
+	componentID := ppaSettings.ComponentID
+	if componentID == 0xFF && ppaSettings.ComponentIDLegacy != 0xFF {
+		componentID = ppaSettings.ComponentIDLegacy
+	}
+
 	// Convert to lib.CommandConfig
 	config := &lib.CommandConfig{
 		Addresses:   ppaSettings.Addresses,
 		Discovery:   ppaSettings.Discover,
-		ComponentID: ppaSettings.ComponentID,
+		ComponentID: componentID,
 		Port:        ppaSettings.Port,
 		Interfaces:  ppaSettings.Interfaces,
 	}
