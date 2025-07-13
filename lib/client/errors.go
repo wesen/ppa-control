@@ -54,4 +54,4 @@ func NewClientError(op string, addr string, err error) error {
 		Addr: addr,
 		Err:  err,
 	}
-} 
+}
