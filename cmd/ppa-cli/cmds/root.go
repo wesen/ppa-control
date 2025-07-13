@@ -83,4 +83,72 @@ func init() {
 	}
 
 	rootCmd.AddCommand(pingGlazedCobraCmd)
+
+	// Add glazed volume command
+	volumeGlazedCmd, err := NewVolumeGlazedCommand()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create glazed volume command")
+	}
+
+	// Build Cobra command with dual mode support
+	volumeGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
+		volumeGlazedCmd,
+		cli.WithGlazeToggleFlag("structured-output"),
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to build glazed volume Cobra command")
+	}
+
+	rootCmd.AddCommand(volumeGlazedCobraCmd)
+
+	// Add glazed recall command
+	recallGlazedCmd, err := NewRecallGlazedCommand()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create glazed recall command")
+	}
+
+	// Build Cobra command with dual mode support
+	recallGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
+		recallGlazedCmd,
+		cli.WithGlazeToggleFlag("structured-output"),
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to build glazed recall Cobra command")
+	}
+
+	rootCmd.AddCommand(recallGlazedCobraCmd)
+
+	// Add glazed UDP broadcast command
+	udpBroadcastGlazedCmd, err := NewUDPBroadcastGlazedCommand()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create glazed UDP broadcast command")
+	}
+
+	// Build Cobra command with dual mode support
+	udpBroadcastGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
+		udpBroadcastGlazedCmd,
+		cli.WithGlazeToggleFlag("structured-output"),
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to build glazed UDP broadcast Cobra command")
+	}
+
+	rootCmd.AddCommand(udpBroadcastGlazedCobraCmd)
+
+	// Add glazed simulate command
+	simulateGlazedCmd, err := NewSimulateGlazedCommand()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create glazed simulate command")
+	}
+
+	// Build Cobra command with dual mode support
+	simulateGlazedCobraCmd, err := cli.BuildCobraCommandDualMode(
+		simulateGlazedCmd,
+		cli.WithGlazeToggleFlag("structured-output"),
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to build glazed simulate Cobra command")
+	}
+
+	rootCmd.AddCommand(simulateGlazedCobraCmd)
 }
