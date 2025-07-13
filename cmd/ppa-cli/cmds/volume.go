@@ -27,6 +27,96 @@ type VolumeSettings struct {
 	Loop   bool    `glazed.parameter:"loop"`
 }
 
+// Run implements the BareCommand interface for classic text output
+func (c *VolumeCommand) Run(ctx context.Context, parsedLayers *layers.ParsedLayers) error {
+	// Initialize logging
+	if err := glazed.InitLogging(parsedLayers); err != nil {
+		return err
+	}
+
+	// Extract volume-specific settings
+	volumeSettings := &VolumeSettings{}
+	if err := parsedLayers.InitializeStruct("volume", volumeSettings); err != nil {
+		return err
+	}
+
+	// Validate volume range
+	if volumeSettings.Volume < 0 || volumeSettings.Volume > 1 {
+		return fmt.Errorf("volume must be between 0 and 1")
+	}
+
+	// Create command context from parsed layers
+	cmdCtx, err := glazed.CreateCommandContextFromParsedLayers(ctx, parsedLayers)
+	if err != nil {
+		return err
+	}
+	defer cmdCtx.Cancel()
+
+	// Setup multiclient
+	if err := cmdCtx.SetupMultiClient("volume"); err != nil {
+		log.Fatal().Err(err).Msg("Failed to setup multiclient")
+		return err
+	}
+
+	// Setup discovery if enabled
+	cmdCtx.SetupDiscovery()
+
+	// Start multiclient
+	cmdCtx.StartMultiClient()
+
+	// Main command loop
+	cmdCtx.RunInGroup(func() error {
+		// Send initial volume
+		cmdCtx.GetMultiClient().SendMasterVolume(volumeSettings.Volume)
+
+		// If not looping, just wait for context cancellation
+		if !volumeSettings.Loop {
+			<-cmdCtx.Context().Done()
+			return cmdCtx.Context().Err()
+		}
+
+		for {
+			t := time.NewTimer(5 * time.Second)
+
+			select {
+			case <-cmdCtx.Context().Done():
+				t.Stop()
+				return cmdCtx.Context().Err()
+
+			case <-t.C:
+				cmdCtx.GetMultiClient().SendMasterVolume(volumeSettings.Volume)
+
+			case msg := <-cmdCtx.Channels.ReceivedCh:
+				t.Stop()
+				if msg.Header != nil {
+					log.Info().Str("from", msg.RemoteAddress.String()).
+						Str("pkg", msg.Client.Name()).
+						Str("type", msg.Header.MessageType.String()).
+						Str("status", msg.Header.Status.String()).
+						Msg("received message")
+				} else {
+					log.Debug().Str("from", msg.RemoteAddress.String()).
+						Str("pkg", msg.Client.Name()).
+						Msg("received unknown message")
+				}
+
+			case msg := <-cmdCtx.Channels.DiscoveryCh:
+				t.Stop()
+				log.Debug().Str("addr", msg.GetAddress()).Msg("discovery message")
+				if newClient, err := cmdCtx.HandleDiscoveryMessage(msg); err != nil {
+					return err
+				} else if newClient != nil {
+					// Send volume immediately to newly discovered client
+					newClient.SendMasterVolume(volumeSettings.Volume)
+				}
+			}
+		}
+	})
+
+	// Wait for completion
+	return cmdCtx.Wait()
+}
+
 // RunIntoGlazeProcessor implements the GlazeCommand interface for structured output
 func (c *VolumeCommand) RunIntoGlazeProcessor(
 	ctx context.Context,
@@ -247,4 +337,5 @@ func NewVolumeCommand() (*VolumeCommand, error) {
 }
 
 // Ensure interface compliance
+var _ cmds.BareCommand = &VolumeCommand{}
 var _ cmds.GlazeCommand = &VolumeCommand{}

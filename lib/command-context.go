@@ -180,6 +180,16 @@ func (cc *CommandContext) HandleDiscoveryMessage(msg discovery.PeerInformation) 
 			Str("addr", msg.GetAddress()).
 			Str("iface", msg.GetInterface()).
 			Msg("peer discovered")
+		
+		// Check if client already exists before adding
+		if cc.multiClient.DoesClientExist(msg.GetAddress()) {
+			log.Debug().
+				Str("addr", msg.GetAddress()).
+				Str("iface", msg.GetInterface()).
+				Msg("client already exists, skipping add")
+			return nil, nil
+		}
+		
 		return cc.multiClient.AddClient(cc.ctx, msg.GetAddress(), msg.GetInterface(), cc.Config.ComponentID)
 	case discovery.PeerLost:
 		log.Info().
