@@ -18,7 +18,7 @@
 
 - Uses Go 1.23+ with modules
 - When implementing go interfaces, use the var _ Interface = &Foo{} to make sure the interface is always implemented correctly.
-- When building web applications, use htmx, bootstrap and the templ templating language.
+- When building web applications, use bootstrap css unless otherwise indicated.
 - Always use a context argument when appropriate.
 - Use cobra for command-line applications.
 - Use the "defaults" package name, instead of "default" package name, as it's reserved in go.
