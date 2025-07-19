@@ -1,0 +1,6 @@
+=== Sequence Number Analysis ===
+
+File: preset-switching-132325.pcap
+  Range: [min-max], Count: total
+  Range: [0-0], Count: 828
+

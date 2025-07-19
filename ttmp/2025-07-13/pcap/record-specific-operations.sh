@@ -62,31 +62,31 @@ echo "   Follow the prompts to capture different protocol interactions"
 echo
 
 # Connection and Discovery
-record_operation "01-connection" \
-    "Initial connection and handshake" \
-    45 \
-    "Start your PPA client and connect to the device"
-
-record_operation "02-device-discovery" \
-    "Device discovery and enumeration" \
-    30 \
-    "Trigger device scan/discovery in your PPA software"
-
-record_operation "03-ping-keepalive" \
-    "Ping and keepalive messages" \
-    60 \
-    "Let the connection idle to capture ping/keepalive traffic"
-
-# Control Operations  
-record_operation "04-volume-control" \
-    "Volume/gain adjustments" \
-    45 \
-    "Adjust input/output volumes and gains"
-
-record_operation "05-mute-operations" \
-    "Mute and unmute operations" \
-    30 \
-    "Toggle mute on various channels"
+# record_operation "01-connection" \
+    # "Initial connection and handshake" \
+    # 45 \
+    # "Start your PPA client and connect to the device"
+# 
+# record_operation "02-device-discovery" \
+    # "Device discovery and enumeration" \
+    # 30 \
+    # "Trigger device scan/discovery in your PPA software"
+# 
+# record_operation "03-ping-keepalive" \
+    # "Ping and keepalive messages" \
+    # 60 \
+    # "Let the connection idle to capture ping/keepalive traffic"
+# 
+# # Control Operations  
+# record_operation "04-volume-control" \
+    # "Volume/gain adjustments" \
+    # 45 \
+    # "Adjust input/output volumes and gains"
+# 
+# record_operation "05-mute-operations" \
+    # "Mute and unmute operations" \
+    # 30 \
+    # "Toggle mute on various channels"
 
 record_operation "06-eq-adjustments" \
     "EQ parameter changes" \

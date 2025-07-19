@@ -1,0 +1,27 @@
+=== LiveCmd Analysis ===
+
+File: preset-switching-132325.pcap
+  Found 331 LiveCmd messages
+  Sample LiveCmd messages:
+    Opening ttmp/2025-07-13/pcap/captures/preset-switching-132325.pcap
+    ----
+    ╭─────────────────╮
+    │ Client → Device │
+    ╰─────────────────╯
+    13:23:28.419812 +53ms EDT
+    192.168.0.39:43586 → 192.168.0.200:5001
+    MessageType: MessageTypeLiveCmd (1)
+    ProtocolId: 1
+    Status: StatusCommandClient (2)
+    DeviceUniqueId: 00000000
+    SequenceNumber: 195
+    ComponentId: fe
+    Reserved: 1
+    LiveCmd.CrtFlags: 0
+    LiveCmd.OptFlags: 1
+    LiveCmd.Path: 06000302010000000000
+    LiveCmd.Value: 95e
+    ----
+    ╭─────────────────╮
+  Path patterns:
+
