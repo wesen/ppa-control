@@ -119,6 +119,14 @@ func run(cmd *cobra.Command, args []string) error {
 	// Create server and handler
 	srv := server.FromCobraCommand(cmd)
 	h := handler.NewHandler(srv)
+
+	// Initialize document service
+	docService := handler.NewDocumentService(".")
+	if err := docService.BuildIndex(); err != nil {
+		log.Warn().Err(err).Msg("Failed to build document index")
+	}
+	h.SetDocumentService(docService)
+
 	r := router.NewRouter(h)
 
 	// Add middleware
